@@ -1,0 +1,42 @@
+# Core Framework
+fastapi==0.115.5
+uvicorn[standard]==0.32.1
+pydantic==2.9.2
+pydantic-settings==2.6.1
+pydantic[email]==2.9.2
+
+# Database
+sqlalchemy==2.0.36
+asyncpg==0.30.0
+alembic==1.14.0
+
+# Security
+python-jose[cryptography]==3.3.0
+passlib[bcrypt]==1.7.4
+bcrypt==4.2.0
+
+# ML / AI
+scikit-learn==1.5.2
+numpy==1.26.4
+scipy==1.14.1
+
+# PyOD (optional - install separately if needed)
+# pyod==2.0.2
+
+# HTTP Client (for Ollama)
+httpx==0.27.2
+
+# Redis (optional caching)
+redis==5.2.0
+aioredis==2.0.1
+
+# File handling
+python-multipart==0.0.17
+aiofiles==24.1.0
+
+# Utilities
+python-dateutil==2.9.0
+ipaddress==1.0.23
+
+# Monitoring
+prometheus-fastapi-instrumentator==7.0.0
