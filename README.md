@@ -8,43 +8,104 @@
 ## Architecture Overview
 
 ```
-┌────────────────────────────────────────────────────────────────────────────┐
-│                        AI Threat Detection System                          │
-├────────────────────────────────────────────────────────────────────────────┤
-│                                                                             │
-│   ┌─────────────┐      ┌──────────────────────────────────────────────┐   │
-│   │   React UI  │─────▶│              FastAPI Backend                  │   │
-│   │  (Vite/TS)  │◀─────│                                              │   │
-│   │  Port 3000  │  WS  │  Routers: auth, logs, alerts, anomalies,    │   │
-│   └─────────────┘      │  dashboard, incidents, intelligence,         │   │
-│                         │  investigation, soar, soc-assistant,         │   │
-│                         │  event-viewer, websocket                     │   │
-│                         │                                              │   │
-│                         │  Services: LogService, AlertService,         │   │
-│                         │  RuleEngine, LLMService, CorrelationEngine,  │   │
-│                         │  ThreatIntelService, SOARService,            │   │
-│                         │  RiskScoringService, BehavioralProfileSvc,   │   │
-│                         │  ClassificationService, CacheService,        │   │
-│                         │  EventViewerService                          │   │
-│                         │                                              │   │
-│                         │  ML Engine: IsolationForest + LOF,           │   │
-│                         │  FeatureEngineering, ModelManager (async)    │   │
-│                         └──────────────────────────────────────────────┘   │
-│                                    │                   │                    │
-│              ┌─────────────────────┘                   │                    │
-│              ▼                                         ▼                    │
-│   ┌──────────────────┐                   ┌──────────────────┐              │
-│   │   PostgreSQL 16  │                   │   Ollama LLM     │              │
-│   │  (Async SQLAlch) │                   │  (Llama3/Gemma)  │              │
-│   └──────────────────┘                   └──────────────────┘              │
-│              │                                                              │
-│              ▼                                                              │
-│   ┌──────────────────┐                                                     │
-│   │      Redis       │                                                     │
-│   │  (Cache/Stream/  │                                                     │
-│   │   Correlation)   │                                                     │
-│   └──────────────────┘                                                     │
-└────────────────────────────────────────────────────────────────────────────┘
+                    ┌─────────────────────────────────────────────────┐
+                    │          AI Threat Detection System  v2.0        │
+                    │             Enterprise SOC Platform               │
+                    └─────────────────────────────────────────────────┘
+
+  ┌─────────────────────────────────────────────────────────────────────────┐
+  │                          PRESENTATION LAYER                             │
+  │                                                                          │
+  │   ┌──────────────────────────────────────────────────────────────────┐  │
+  │   │                    React 18 + Vite + TypeScript                   │  │
+  │   │                         (Port 3000)                               │  │
+  │   │                                                                   │  │
+  │   │  Dashboard  │  Logs  │  Alerts  │  Anomalies  │  Event Viewer    │  │
+  │   │  Incidents  │  SOAR  │  Threat Intel  │  Investigation            │  │
+  │   │                    SOC Assistant (AI Chat)                        │  │
+  │   └──────────────────────────────────────────────────────────────────┘  │
+  └────────────────────────────┬──────────────────────────────────────────┘
+                               │  REST API + WebSocket
+                               ▼
+  ┌─────────────────────────────────────────────────────────────────────────┐
+  │                           API LAYER  (Port 8000)                        │
+  │                                                                          │
+  │   ┌──────────────────────────────────────────────────────────────────┐  │
+  │   │                    FastAPI  (Python 3.12, async)                  │  │
+  │   │                                                                   │  │
+  │   │  /auth  /logs  /alerts  /anomalies  /dashboard  /rules           │  │
+  │   │  /incidents  /intelligence  /investigation  /soar                 │  │
+  │   │  /soc-assistant  /event-viewer  /ws  /health  /status            │  │
+  │   └──────────────────────────────────────────────────────────────────┘  │
+  └────────────────────────────┬──────────────────────────────────────────┘
+                               │
+                               ▼
+  ┌─────────────────────────────────────────────────────────────────────────┐
+  │                         SERVICES LAYER                                  │
+  │                                                                          │
+  │  ┌───────────────┐  ┌───────────────┐  ┌───────────────┐               │
+  │  │  Log Service  │  │ Alert Service │  │  Rule Engine  │               │
+  │  │  (ingest,     │  │  (CRUD, WS    │  │  (SIEM rules, │               │
+  │  │  parse, bulk) │  │   broadcast)  │  │   CRUD + test)│               │
+  │  └───────────────┘  └───────────────┘  └───────────────┘               │
+  │                                                                          │
+  │  ┌───────────────┐  ┌───────────────┐  ┌───────────────┐               │
+  │  │  Correlation  │  │  Risk Scoring │  │Classification │               │
+  │  │  Engine       │  │  (composite   │  │  Engine       │               │
+  │  │  (auto-       │  │   0-100 score)│  │  (14 MITRE    │               │
+  │  │  incidents)   │  │               │  │   categories) │               │
+  │  └───────────────┘  └───────────────┘  └───────────────┘               │
+  │                                                                          │
+  │  ┌───────────────┐  ┌───────────────┐  ┌───────────────┐               │
+  │  │  Threat Intel │  │  SOAR Service │  │  Behavioral   │               │
+  │  │  (GeoIP,      │  │  (playbooks,  │  │  Profiling    │               │
+  │  │  AbuseIPDB,   │  │  IP blacklist,│  │  (1h/24h      │               │
+  │  │  reputation)  │  │  auto-block)  │  │  baselines)   │               │
+  │  └───────────────┘  └───────────────┘  └───────────────┘               │
+  │                                                                          │
+  │  ┌───────────────┐  ┌───────────────┐  ┌───────────────┐               │
+  │  │  LLM Service  │  │  Event Viewer │  │ Cache Service │               │
+  │  │  (Ollama,     │  │  (Win Event   │  │  (Redis       │               │
+  │  │  SOC chat,    │  │  Log stream)  │  │   abstraction)│               │
+  │  │  streaming)   │  │               │  │               │               │
+  │  └───────────────┘  └───────────────┘  └───────────────┘               │
+  └────────────────────────────┬──────────────────────────────────────────┘
+                               │
+                               ▼
+  ┌─────────────────────────────────────────────────────────────────────────┐
+  │                          ML / AI LAYER                                  │
+  │                                                                          │
+  │   ┌──────────────────────┐        ┌─────────────────────────────────┐  │
+  │   │   Anomaly Detector   │        │         Model Manager           │  │
+  │   │                      │        │                                  │  │
+  │   │  IsolationForest     │        │  • Async training (non-blocking) │  │
+  │   │       +  LOF         │        │  • Auto-train from DB on start   │  │
+  │   │  ensemble (0–1 score)│        │  • Model persistence to disk     │  │
+  │   └──────────────────────┘        │  • Scheduled retraining (24h)   │  │
+  │                                   └─────────────────────────────────┘  │
+  │   ┌──────────────────────────────────────────────────────────────────┐  │
+  │   │                     Feature Engineering                          │  │
+  │   │      IP behavior · port patterns · traffic volume · time         │  │
+  │   └──────────────────────────────────────────────────────────────────┘  │
+  └─────────────────────────────────────────────────────────────────────────┘
+                               │
+             ┌─────────────────┼──────────────────┐
+             ▼                 ▼                  ▼
+  ┌────────────────┐  ┌─────────────────┐  ┌───────────────────┐
+  │  PostgreSQL 16 │  │    Redis 7      │  │   Ollama LLM      │
+  │                │  │                 │  │                   │
+  │  • Log entries │  │  • SOAR         │  │  Llama3 / Gemma   │
+  │  • Alerts      │  │    blacklist    │  │                   │
+  │  • Incidents   │  │  • Correlation  │  │  • Threat explain │
+  │  • Threat intel│  │    state        │  │  • SOC assistant  │
+  │  • Blacklist   │  │  • Behavioral   │  │  • MITRE TTPs     │
+  │  • Rules       │  │    profiles     │  │  • Remediation    │
+  │  • Anomalies   │  │  • TI cache     │  │    steps          │
+  │                │  │  • Alert cache  │  │                   │
+  │  SQLAlchemy 2  │  │  • Event stream │  │  (graceful        │
+  │  async/asyncpg │  │                 │  │   fallback when   │
+  └────────────────┘  └─────────────────┘  │   offline)        │
+                                           └───────────────────┘
 ```
 
 ---
