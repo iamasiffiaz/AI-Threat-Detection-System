@@ -1,6 +1,7 @@
 # AI Threat Detection System
+### Enterprise SOC Platform — v2.0.0
 
-> **Production-ready Security Operations Center (SOC) platform** with ML-powered anomaly detection, SIEM-style rule engine, LLM threat explanation, automated incident response, threat intelligence, and real-time dashboards.
+> **Production-ready Security Operations Center (SOC) platform** with ML-powered anomaly detection, SIEM-style rule engine, LLM threat explanation, automated incident response, threat intelligence, SOAR automation, behavioral profiling, attack classification, and real-time dashboards.
 
 ---
 
@@ -93,6 +94,30 @@
 | `data_exfiltration` | Outbound transfer > 50MB |
 | `critical_severity_event` | Any CRITICAL severity log |
 
+Rules are fully manageable via REST API — create, update, enable/disable, and test rules against sample log payloads without restarting the server.
+
+### Attack Classification Engine
+Classifies every alert into one of **14 MITRE ATT&CK-aligned attack categories** using a multi-signal decision tree:
+
+| Category | Examples |
+|---|---|
+| Brute Force | SSH/RDP repeated login failures |
+| Port Scanning | Rapid sequential port probing |
+| DDoS / Flood | SYN flood, HTTP flood |
+| Suspicious Login | Off-hours, geo-anomaly logins |
+| Data Exfiltration | Large outbound transfers |
+| SQL Injection | SQLi payloads in HTTP logs |
+| Web Application Attack | XSS, LFI, RCE via HTTP |
+| C2 Communication | Beacon patterns, C2 domain calls |
+| DNS Tunneling | Unusually long DNS queries |
+| Remote Code Execution | Shell execution events |
+| Credential Stuffing | High-volume multi-account failures |
+| Internal Reconnaissance | Internal subnet scanning |
+| Lateral Movement | East-west movement between hosts |
+| Unknown / Anomaly | ML-detected without rule match |
+
+Signal priority: rule engine match → ML pattern → behavioral signals → heuristic fallback. Each classification includes a **confidence score (0–1)** and human-readable reasoning.
+
 ### AI Threat Explanation
 - Integrates with local **Ollama** LLM (Llama3, Gemma, etc.)
 - Generates: threat explanation, attack type, MITRE ATT&CK TTPs, mitigation steps
@@ -138,7 +163,8 @@
 - **Automated playbooks** for each attack type with step-by-step response actions
 - One-click automated response on any alert: runs the matching playbook and (optionally) blocks the source IP
 - Playbook library covers: Brute Force, Port Scan, DDoS, Data Exfiltration, Privilege Escalation, Suspicious Port Access
-- SOAR statistics: blocked IPs, total block hits, active playbooks
+- SOAR statistics: blocked IPs, total block hits, auto-blocked count, active playbooks
+- **Auto-block on high risk**: IPs exceeding the configurable risk threshold are automatically blocked at ingestion time
 
 ### Risk Scoring
 - Dynamic **composite risk score** (0–100) per alert, combining:
@@ -147,12 +173,31 @@
   - Threat intelligence reputation
   - Behavioral profile signals
 - Automatic severity reclassification based on final score
+- **Auto-block**: IPs scoring ≥ 85 are automatically added to the SOAR blacklist
+
+### Behavioral Profiling
+- Per-IP and per-user behavioral baselines maintained in Redis
+- **Short window (1h):** request count, failed logins, unique ports, unique destinations, bytes out, alert count
+- **Long window (24h):** rolling request and failure counters
+- **Baseline snapshots** updated every 15 minutes (7-day retention)
+- **Deviation score (0–1)** fed into the risk scoring pipeline — flags anomalies even when no individual rule fires
+- Detects new/first-seen IP sources automatically
 
 ### Event Viewer
 - **Windows Event Log-style live viewer** — monitors raw Redis streams and log channels
+- **Auto-starts on Windows** at application boot — zero-configuration real-time threat feed
 - Start/stop real-time monitoring, pull-now on demand
 - Channel status inspection and watermark management
 - Diagnostic endpoint for troubleshooting ingestion pipelines
+- Purge sample data and reset stream watermarks via API
+
+### Startup Auto-Initialization
+On every startup the platform automatically:
+- Runs DB schema migrations (zero-downtime)
+- Connects Redis and syncs the SOAR IP blacklist into the hot-set
+- Loads or **auto-trains** the ML anomaly model from existing DB logs (no manual step needed)
+- Starts the Windows Event Viewer integration (Windows hosts only)
+- All subsystem health is exposed at `GET /api/v1/status`
 
 ### Dashboard
 - Real-time KPIs: total logs, open alerts, anomalies, events/hour
@@ -197,6 +242,7 @@ AI Threat Detection System/
 │   │   │   ├── alerts.py
 │   │   │   ├── anomalies.py
 │   │   │   ├── dashboard.py
+│   │   │   ├── rules.py                   # Detection rules CRUD + test
 │   │   │   ├── incidents.py               # Incident management
 │   │   │   ├── intelligence.py            # Threat intelligence
 │   │   │   ├── investigation.py           # IP forensics
@@ -220,7 +266,8 @@ AI Threat Detection System/
 │   │   ├── ml/                            # ML/AI components
 │   │   │   ├── feature_engineering.py
 │   │   │   ├── anomaly_detector.py        # IF + LOF ensemble
-│   │   │   └── model_manager.py           # Async model lifecycle
+│   │   │   ├── model_manager.py           # Async model lifecycle
+│   │   │   └── model_trainer.py           # On-demand + scheduled retraining
 │   │   └── utils/
 ├── frontend/
 │   ├── src/
@@ -445,10 +492,27 @@ npm run dev  # Starts on http://localhost:3000
 | POST   | `/api/v1/event-viewer/reset-watermarks` | Reset stream watermarks     |
 | GET    | `/api/v1/event-viewer/diagnose`     | Diagnose ingestion pipeline     |
 
+### Detection Rules
+| Method | Endpoint                        | Description                       |
+|--------|---------------------------------|-----------------------------------|
+| GET    | `/api/v1/rules`                 | List all detection rules          |
+| POST   | `/api/v1/rules`                 | Create a new rule (admin)         |
+| GET    | `/api/v1/rules/{id}`            | Get specific rule                 |
+| PUT    | `/api/v1/rules/{id}`            | Update rule (admin)               |
+| DELETE | `/api/v1/rules/{id}`            | Delete rule (admin)               |
+| POST   | `/api/v1/rules/{id}/toggle`     | Enable / disable rule (admin)     |
+| POST   | `/api/v1/rules/test`            | Test rule against a sample log    |
+
 ### Dashboard
 | Method | Endpoint                       | Description               |
 |--------|--------------------------------|---------------------------|
 | GET    | `/api/v1/dashboard/overview`   | All KPIs in one request   |
+
+### Health & Status
+| Method | Endpoint            | Description                                   |
+|--------|---------------------|-----------------------------------------------|
+| GET    | `/health`           | Liveness probe (returns `{"status":"healthy"}`) |
+| GET    | `/api/v1/status`    | Full subsystem status: ML, LLM, Redis, SOAR, correlation, event viewer |
 
 ### WebSocket
 | Endpoint                   | Description                           |
@@ -464,18 +528,73 @@ Authentication: pass `?token=<jwt>` as query parameter.
 
 All settings are loaded from environment variables (`.env` file):
 
-| Variable                      | Default      | Description                               |
-|-------------------------------|--------------|-------------------------------------------|
-| `DATABASE_URL`                | —            | PostgreSQL async connection string        |
-| `SECRET_KEY`                  | —            | JWT signing key (min 32 chars)            |
-| `OLLAMA_BASE_URL`             | localhost    | Ollama API endpoint                       |
-| `OLLAMA_MODEL`                | `llama3`     | LLM model name                            |
-| `ABUSEIPDB_API_KEY`           | —            | Optional: AbuseIPDB key for IP reputation |
-| `ANOMALY_THRESHOLD`           | `0.6`        | Score above which anomaly alerts fire     |
-| `FAILED_LOGIN_THRESHOLD`      | `5`          | Failed logins before brute-force alert    |
-| `PORT_SCAN_THRESHOLD`         | `20`         | Unique ports before port scan alert       |
-| `MIN_TRAINING_SAMPLES`        | `100`        | Minimum logs required for ML training     |
-| `ACCESS_TOKEN_EXPIRE_MINUTES` | `60`         | JWT access token lifetime                 |
+### Application
+| Variable                      | Default        | Description                                   |
+|-------------------------------|----------------|-----------------------------------------------|
+| `APP_NAME`                    | `AI SOC Platform` | Application display name                   |
+| `ENVIRONMENT`                 | `production`   | `production` or `development`                 |
+| `DEBUG`                       | `false`        | Enables verbose logging                       |
+
+### Database
+| Variable                      | Default        | Description                                   |
+|-------------------------------|----------------|-----------------------------------------------|
+| `DATABASE_URL`                | —              | PostgreSQL async connection string            |
+| `DATABASE_POOL_SIZE`          | `10`           | SQLAlchemy connection pool size               |
+| `DATABASE_MAX_OVERFLOW`       | `20`           | Max extra connections above pool size         |
+
+### Redis
+| Variable                      | Default        | Description                                   |
+|-------------------------------|----------------|-----------------------------------------------|
+| `REDIS_URL`                   | `redis://localhost:6379` | Redis connection URL            |
+| `REDIS_CACHE_TTL`             | `300`          | Default cache TTL in seconds (5 min)          |
+
+### Authentication
+| Variable                      | Default        | Description                                   |
+|-------------------------------|----------------|-----------------------------------------------|
+| `SECRET_KEY`                  | —              | JWT signing key (min 32 chars)                |
+| `ACCESS_TOKEN_EXPIRE_MINUTES` | `60`           | JWT access token lifetime                     |
+| `REFRESH_TOKEN_EXPIRE_DAYS`   | `7`            | JWT refresh token lifetime                    |
+
+### LLM
+| Variable                      | Default        | Description                                   |
+|-------------------------------|----------------|-----------------------------------------------|
+| `OLLAMA_BASE_URL`             | `http://localhost:11434` | Ollama API endpoint            |
+| `OLLAMA_MODEL`                | `llama3`       | LLM model name                                |
+| `OLLAMA_TIMEOUT`              | `60`           | LLM request timeout in seconds                |
+
+### ML Model
+| Variable                      | Default        | Description                                   |
+|-------------------------------|----------------|-----------------------------------------------|
+| `ANOMALY_THRESHOLD`           | `0.6`          | Score above which anomaly alerts fire         |
+| `MIN_TRAINING_SAMPLES`        | `100`          | Minimum logs required for ML training         |
+| `MODEL_RETRAIN_INTERVAL_HOURS`| `24`           | Auto-retrain interval                         |
+
+### Alert & Rule Engine
+| Variable                      | Default        | Description                                   |
+|-------------------------------|----------------|-----------------------------------------------|
+| `ALERT_COOLDOWN_SECONDS`      | `300`          | Minimum gap between same-rule alerts per IP   |
+| `MAX_ALERTS_PER_IP_PER_HOUR`  | `10`           | Rate-limit on alerts from a single IP         |
+| `FAILED_LOGIN_THRESHOLD`      | `5`            | Failed logins before brute-force alert        |
+| `PORT_SCAN_THRESHOLD`         | `20`           | Unique ports before port scan alert           |
+| `TRAFFIC_SPIKE_MULTIPLIER`    | `3.0`          | Traffic spike multiplier for DDoS detection   |
+
+### File Upload
+| Variable                      | Default        | Description                                   |
+|-------------------------------|----------------|-----------------------------------------------|
+| `MAX_UPLOAD_SIZE_MB`          | `50`           | Maximum log file upload size                  |
+| `ALLOWED_UPLOAD_EXTENSIONS`   | `.csv .json .log .txt` | Accepted file extensions           |
+
+### Threat Intelligence
+| Variable                      | Default        | Description                                   |
+|-------------------------------|----------------|-----------------------------------------------|
+| `ABUSEIPDB_API_KEY`           | —              | Optional: AbuseIPDB key for live IP reputation|
+
+### SOAR & Incident Correlation
+| Variable                      | Default        | Description                                   |
+|-------------------------------|----------------|-----------------------------------------------|
+| `AUTO_BLOCK_RISK_THRESHOLD`   | `85.0`         | Risk score above which IPs are auto-blocked   |
+| `INCIDENT_BURST_THRESHOLD`    | `3`            | Alerts in 5 min to auto-create an incident    |
+| `INCIDENT_AUTO_RISK_THRESHOLD`| `85.0`         | Single-alert risk score for auto-incident     |
 
 ---
 
