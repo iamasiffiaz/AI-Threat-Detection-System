@@ -39,19 +39,19 @@
 |  |  ingest/parse/bulk  |  |  CRUD / WS broadcast|  |  SIEM / CRUD    | |
 |  |  upload / stream    |  |  rate-limit/cooldown|  |  test endpoint  | |
 |  +---------------------+  +---------------------+  +-----------------+ |
-|                                                                         |
+|                                                                        |
 |  +---------------------+  +---------------------+  +-----------------+ |
 |  |  Correlation Engine |  |  Risk Scoring       |  |  Classification | |
 |  |  auto-incidents     |  |  composite 0-100    |  |  Engine         | |
 |  |  burst/chain/recon  |  |  auto-block >= 85   |  |  14 MITRE cats  | |
 |  +---------------------+  +---------------------+  +-----------------+ |
-|                                                                         |
+|                                                                        |
 |  +---------------------+  +---------------------+  +-----------------+ |
 |  |  Threat Intel       |  |  SOAR Service       |  |  Behavioral     | |
 |  |  GeoIP / AbuseIPDB  |  |  playbooks          |  |  Profiling      | |
 |  |  reputation / cache |  |  IP blacklist       |  |  1h / 24h base  | |
 |  +---------------------+  +---------------------+  +-----------------+ |
-|                                                                         |
+|                                                                        |
 |  +---------------------+  +---------------------+  +-----------------+ |
 |  |  LLM Service        |  |  Event Viewer       |  |  Cache Service  | |
 |  |  Ollama / chat      |  |  Win Event Log      |  |  Redis          | |
