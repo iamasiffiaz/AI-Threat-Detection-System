@@ -502,14 +502,45 @@ The backend supports **horizontal scaling** — run multiple instances behind a 
 
 ## Screenshots
 
-> Dashboard Overview
-> ![Dashboard](docs/screenshots/dashboard.png)
+### SOC Dashboard
+![SOC Dashboard](docs/screenshots/dashboard.png)
+*Real-time KPIs, incident status, alert severity distribution, system health, log traffic chart, and ML detection engine status.*
 
-> Alerts Page with LLM Explanation
-> ![Alerts](docs/screenshots/alerts.png)
+### Log Management
+![Log Management](docs/screenshots/logs.png)
+*Upload logs, generate sample data, train the ML model, and browse all ingested log entries with filtering.*
 
-> Anomaly Detection
-> ![Anomalies](docs/screenshots/anomalies.png)
+### Anomaly Detection
+![Anomaly Detection](docs/screenshots/anomalies.png)
+*ML model info, anomaly trends chart, top anomalous IPs, and recent anomaly list with scores.*
+
+### Alerts
+![Alerts](docs/screenshots/alerts.png)
+*Full alert list with severity badges, attack type classification, risk scores, GeoIP, and status tracking.*
+
+### Incident Management
+![Incident Management](docs/screenshots/incidents.png)
+*Auto-correlated incidents with severity, linked alert count, status lifecycle, and avg risk score.*
+
+### SOAR Automation
+![SOAR Automation](docs/screenshots/soar.png)
+*IP blacklist management, block statistics, and automated response playbooks per attack type.*
+
+### Threat Intelligence
+![Threat Intelligence](docs/screenshots/threat-intel.png)
+*GeoIP enrichment, IP reputation lookup, ISP/ASN info, and top threat IPs seen in the system.*
+
+### Forensic Investigation
+![Forensic Investigation](docs/screenshots/investigation.png)
+*Per-IP forensic drill-down: behavioral profile, threat intel, log history, and correlated alert timeline.*
+
+### Windows Event Viewer
+![Event Viewer](docs/screenshots/event-viewer.png)
+*Real-time Windows Event Log ingestion with channel configuration, live event feed, watermarks, and manual pull.*
+
+### AI SOC Assistant
+![AI SOC Assistant](docs/screenshots/soc-assistant.png)
+*Chat-style LLM interface for analysts — explain alerts, get remediation advice, and summarize incidents in plain English.*
 
 ---
 
