@@ -40,6 +40,14 @@ export interface LogEntry {
   duration_ms: number | null
   username: string | null
   country_code: string | null
+  geo_city: string | null
+  geo_isp: string | null
+  threat_reputation: number | null
+  is_known_bad_ip: boolean | null
+  is_blacklisted: boolean | null
+  anomaly_score: number | null
+  risk_score: number | null
+  attack_type: string | null
   ingested_at: string
 }
 
@@ -73,6 +81,17 @@ export interface Alert {
   attack_type: string | null
   mitigation_steps: string | null
   log_entry_id: number | null
+  // Enterprise fields
+  risk_score: number | null
+  incident_id: number | null
+  geo_country: string | null
+  geo_city: string | null
+  threat_reputation: number | null
+  is_known_bad_ip: boolean | null
+  kill_chain_phase: string | null
+  mitre_ttps: string | null
+  false_positive_likelihood: string | null
+  behavior_score: number | null
   triggered_at: string
   resolved_at: string | null
 }
@@ -86,6 +105,159 @@ export interface AlertSummary {
   by_type: Record<string, number>
   by_status: Record<string, number>
   recent_alerts: Alert[]
+}
+
+// ─── Incident Types ───────────────────────────────────────────────────────────
+
+export type IncidentSeverity = 'low' | 'medium' | 'high' | 'critical'
+export type IncidentStatus   = 'open' | 'investigating' | 'contained' | 'resolved' | 'false_positive'
+
+export interface Incident {
+  id: number
+  title: string
+  description: string | null
+  severity: IncidentSeverity
+  status: IncidentStatus
+  risk_score: number
+  alert_count: number
+  source_ip: string | null
+  attack_types: string[] | null
+  mitre_ttps: string | null
+  kill_chain_phases: string[] | null
+  geo_country: string | null
+  threat_reputation: number | null
+  is_known_bad_ip: boolean
+  assigned_to: string | null
+  llm_summary: string | null
+  recommended_playbook: string | null
+  auto_actions_taken: string[] | null
+  first_seen: string
+  last_seen: string
+  resolved_at: string | null
+}
+
+export interface IncidentSummary {
+  total: number
+  open: number
+  investigating: number
+  resolved: number
+  critical: number
+  high: number
+  avg_risk_score: number
+}
+
+// ─── Threat Intelligence Types ────────────────────────────────────────────────
+
+export interface ThreatIntelResult {
+  ip_address: string
+  country_code: string
+  country_name: string
+  region: string
+  city: string
+  isp: string
+  asn: string
+  latitude: number
+  longitude: number
+  timezone_name: string
+  is_known_bad: boolean
+  is_tor_exit: boolean
+  is_proxy: boolean
+  is_datacenter: boolean
+  reputation_score: number
+  threat_categories: string[]
+  abuse_confidence: number
+  source: string
+  cached: boolean
+}
+
+// ─── SOAR / Blacklist Types ───────────────────────────────────────────────────
+
+export interface BlacklistEntry {
+  id: number
+  ip_address: string
+  reason: string
+  attack_types: string[] | null
+  risk_score: number | null
+  added_by: string
+  is_active: boolean
+  block_hits: number
+  expires_at: string | null
+  created_at: string
+}
+
+export interface Playbook {
+  name: string
+  steps: string[]
+  auto_actions: string[]
+  sla_minutes: number
+  severity_trigger: string
+}
+
+// ─── Investigation / Forensic Types ──────────────────────────────────────────
+
+export interface ForensicReport {
+  ip_address: string
+  first_seen: string | null
+  last_seen: string | null
+  total_logs: number
+  total_alerts: number
+  open_incidents: number
+  risk_score_max: number
+  attack_types: string[]
+  geo_info: {
+    country_code: string
+    country_name: string
+    city: string
+    isp: string
+    asn: string
+    latitude: number
+    longitude: number
+    is_tor_exit: boolean
+    is_proxy: boolean
+    is_known_bad: boolean
+    reputation_score: number
+    threat_categories: string[]
+  }
+  behavior_summary: {
+    requests_1h: number
+    failed_logins_1h: number
+    unique_ports_1h: number
+    unique_dests_1h: number
+    bytes_out_1h: number
+    requests_24h: number
+    deviation_score: number
+    is_new_source: boolean
+    baseline_requests: number
+    baseline_failures: number
+  }
+  recent_alerts: Array<{
+    id: number
+    title: string
+    severity: AlertSeverity
+    risk_score: number | null
+    attack_type: string | null
+    rule_name: string | null
+    triggered_at: string
+    status: AlertStatus
+  }>
+  timeline_events: Array<{
+    time: string
+    type: 'log' | 'alert'
+    event: string
+    severity: string
+    details: string
+    risk_score: number | null
+    attack_type: string | null
+  }>
+}
+
+// ─── SOC Assistant Types ──────────────────────────────────────────────────────
+
+export interface SOCResponse {
+  answer: string
+  sources_used: string[]
+  confidence: string
+  recommended_actions: string[] | null
 }
 
 // ─── Anomaly Types ───────────────────────────────────────────────────────────
@@ -144,6 +316,8 @@ export interface DashboardOverview {
     title: string
     severity: AlertSeverity
     status: AlertStatus
+    risk_score: number | null
+    attack_type: string | null
     triggered_at: string
   }>
   recent_anomalies: Array<{

@@ -122,6 +122,31 @@ class AnomalyDetector:
 
         X = np.nan_to_num(X, nan=0.0, posinf=0.0, neginf=0.0)
 
+        # Guard: if the saved model was trained on a different feature count,
+        # reset so the caller falls back to 0.0 scores until re-trained.
+        expected = getattr(
+            self.isolation_forest_pipeline.named_steps.get("scaler"), "n_features_in_", None
+        )
+        if expected is not None and X.shape[1] != expected:
+            logger.warning(
+                "Feature count mismatch: model expects %d but got %d — "
+                "resetting model and deleting stale pkl so it retrains.",
+                expected, X.shape[1],
+            )
+            self.is_trained = False
+            self._build_pipelines()
+            # Delete stale pkl so next startup doesn't load it again
+            stale_path = os.path.join(MODEL_DIR, "anomaly_detector.pkl")
+            try:
+                if os.path.exists(stale_path):
+                    os.remove(stale_path)
+            except Exception:
+                pass
+            raise RuntimeError(
+                f"Stale model (trained on {expected} features) reset; "
+                "will retrain on next threshold crossing."
+            )
+
         # Isolation Forest: decision_function returns negative scores for anomalies
         if_scores_raw = self.isolation_forest_pipeline.decision_function(X)
         # Normalize: more negative = more anomalous → invert and normalize to [0,1]
@@ -179,15 +204,31 @@ class AnomalyDetector:
         logger.info(f"Model saved to {path}")
         return path
 
+    # Number of features the current FeatureEngineer produces
+    EXPECTED_FEATURES = 35
+
     def load(self, path: Optional[str] = None) -> bool:
         """Load a persisted model from disk. Returns True on success."""
         path = path or os.path.join(MODEL_DIR, "anomaly_detector.pkl")
         if not os.path.exists(path):
-            logger.warning(f"Model file not found: {path}")
+            logger.info(f"No saved model at {path} — will train from scratch.")
             return False
         try:
             with open(path, "rb") as f:
                 data = pickle.load(f)
+
+            # Validate feature count before accepting the model
+            scaler = data["if_pipeline"].named_steps.get("scaler")
+            saved_features = getattr(scaler, "n_features_in_", None)
+            if saved_features is not None and saved_features != self.EXPECTED_FEATURES:
+                logger.warning(
+                    "Stale model (trained on %d features, expected %d) — "
+                    "deleting pkl and retraining.",
+                    saved_features, self.EXPECTED_FEATURES,
+                )
+                os.remove(path)
+                return False
+
             self.isolation_forest_pipeline = data["if_pipeline"]
             self.lof_pipeline = data["lof_pipeline"]
             self.pyod_model = data.get("pyod_model")
@@ -195,10 +236,15 @@ class AnomalyDetector:
             self.trained_at = data["trained_at"]
             self.training_samples = data["training_samples"]
             self.contamination = data["contamination"]
-            logger.info(f"Model loaded from {path}")
+            logger.info(f"Model loaded from {path} ({saved_features} features)")
             return True
         except Exception as e:
             logger.error(f"Failed to load model: {e}")
+            # Delete corrupted pkl
+            try:
+                os.remove(path)
+            except Exception:
+                pass
             return False
 
     def get_info(self) -> Dict[str, Any]:

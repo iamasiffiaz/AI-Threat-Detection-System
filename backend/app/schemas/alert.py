@@ -21,6 +21,19 @@ class AlertResponse(BaseModel):
     attack_type: Optional[str]
     mitigation_steps: Optional[str]
     log_entry_id: Optional[int]
+
+    # Enterprise SOC fields
+    risk_score:               Optional[float] = None
+    incident_id:              Optional[int]   = None
+    geo_country:              Optional[str]   = None
+    geo_city:                 Optional[str]   = None
+    threat_reputation:        Optional[float] = None
+    is_known_bad_ip:          Optional[bool]  = None
+    kill_chain_phase:         Optional[str]   = None
+    mitre_ttps:               Optional[str]   = None
+    false_positive_likelihood: Optional[str]  = None
+    behavior_score:           Optional[float] = None
+
     triggered_at: datetime
     resolved_at: Optional[datetime]
 

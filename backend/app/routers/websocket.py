@@ -94,13 +94,13 @@ async def alert_stream(
 
 
 @router.websocket("/logs/stream")
-async def log_stream_simulation(
+async def log_stream_live(
     websocket: WebSocket,
     token: str = Query(...),
 ):
     """
-    WebSocket endpoint that simulates real-time log streaming.
-    Generates and broadcasts synthetic log events every second.
+    WebSocket endpoint that streams real log entries from the Event Viewer feed.
+    Sends the latest event every poll cycle; no synthetic data.
     """
     payload = decode_token(token)
     if not payload:
@@ -109,30 +109,34 @@ async def log_stream_simulation(
 
     await websocket.accept()
 
-    import random
-    sample_ips = ["192.168.1.100", "10.0.0.5", "203.0.113.45", "185.220.101.5"]
-    event_types = ["login_success", "login_failed", "web_request", "firewall_block", "port_scan"]
+    from app.services.event_viewer_service import event_viewer_service
+
+    last_seen = 0   # index into _recent_events we last sent
 
     try:
         await websocket.send_text(json.dumps({
             "type": "connected",
-            "message": "Connected to log stream simulation",
+            "message": "Connected to live Windows Event log stream",
+            "timestamp": datetime.now(timezone.utc).isoformat(),
         }))
 
         while True:
-            log_event = {
-                "type": "log_entry",
-                "data": {
+            events = event_viewer_service._recent_events
+            if len(events) > last_seen:
+                new_events = events[last_seen:]
+                last_seen = len(events)
+                for ev in new_events:
+                    await websocket.send_text(json.dumps({
+                        "type": "log_entry",
+                        "data": ev,
+                    }))
+            else:
+                # Heartbeat so the connection stays alive
+                await websocket.send_text(json.dumps({
+                    "type": "heartbeat",
                     "timestamp": datetime.now(timezone.utc).isoformat(),
-                    "source_ip": random.choice(sample_ips),
-                    "destination_port": random.choice([22, 80, 443, 3306, 8080]),
-                    "event_type": random.choice(event_types),
-                    "severity": random.choice(["info", "low", "medium", "high"]),
-                    "bytes_sent": random.randint(100, 50000),
-                },
-            }
-            await websocket.send_text(json.dumps(log_event))
-            await asyncio.sleep(1.0)  # Simulate 1 event per second
+                }))
+            await asyncio.sleep(5.0)
 
     except WebSocketDisconnect:
         logger.info("Log stream client disconnected")

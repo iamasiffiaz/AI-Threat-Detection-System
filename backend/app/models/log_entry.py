@@ -4,7 +4,7 @@ Indexed for high-performance queries on timestamp, source_ip, and severity.
 """
 import enum
 from datetime import datetime, timezone
-from sqlalchemy import String, Integer, Float, DateTime, Enum as SAEnum, Text, Index
+from sqlalchemy import String, Integer, Float, DateTime, Enum as SAEnum, Text, Index, Boolean
 from sqlalchemy.orm import Mapped, mapped_column
 from app.core.database import Base
 
@@ -55,6 +55,28 @@ class LogEntry(Base):
     user_agent: Mapped[str] = mapped_column(String(512), nullable=True)
     username: Mapped[str] = mapped_column(String(100), nullable=True)
     country_code: Mapped[str] = mapped_column(String(2), nullable=True)
+
+    # Extended GeoIP fields
+    geo_city: Mapped[str] = mapped_column(String(100), nullable=True)
+    geo_isp:  Mapped[str] = mapped_column(String(200), nullable=True)
+    geo_asn:  Mapped[str] = mapped_column(String(50),  nullable=True)
+    latitude:  Mapped[float] = mapped_column(Float, nullable=True)
+    longitude: Mapped[float] = mapped_column(Float, nullable=True)
+
+    # Threat intelligence
+    threat_reputation: Mapped[float] = mapped_column(Float, nullable=True)   # 0-100
+    is_known_bad_ip:   Mapped[bool]  = mapped_column(Boolean, nullable=True, default=False)
+    is_blacklisted:    Mapped[bool]  = mapped_column(Boolean, nullable=True, default=False)
+
+    # ML / detection enrichment
+    anomaly_score:  Mapped[float] = mapped_column(Float, nullable=True)   # from anomaly detector
+    risk_score:     Mapped[float] = mapped_column(Float, nullable=True)   # composite 0-100
+    attack_type:    Mapped[str]   = mapped_column(String(100), nullable=True)
+    alert_generated: Mapped[bool] = mapped_column(Boolean, nullable=True, default=False)
+
+    # Multi-tenant
+    tenant_id: Mapped[int] = mapped_column(Integer, nullable=True, index=True)
+
     ingested_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
         default=lambda: datetime.now(timezone.utc),

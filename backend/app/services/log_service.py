@@ -1,7 +1,8 @@
 """
 Log Service: handles log ingestion, storage, querying, and statistics.
-Coordinates with the ML model and rule engine on every ingestion.
+Coordinates with the ML model, rule engine, threat intel, and behavioral profiling.
 """
+import asyncio
 import csv
 import json
 import io
@@ -15,6 +16,9 @@ from app.models.anomaly import Anomaly
 from app.schemas.log_entry import LogEntryCreate, LogStatistics
 from app.services.rule_engine import rule_engine
 from app.services.alert_service import alert_service
+from app.services.behavioral_profile_service import behavioral_profile_service
+from app.services.soar_service import soar_service
+from app.services.cache_service import cache_service
 from app.ml.model_manager import model_manager
 from app.core.config import settings
 
@@ -43,6 +47,16 @@ class LogService:
 
         log_dict = self._log_to_dict(log_entry)
 
+        # Behavioral profile update (fast Redis ops, non-blocking)
+        profile = await behavioral_profile_service.update_ip(log_entry.source_ip, log_dict)
+        if log_entry.username:
+            await behavioral_profile_service.update_user(log_entry.username, log_dict)
+
+        # Quick blacklist check — mark log entry if source IP is blocked
+        if await soar_service.is_blocked(log_entry.source_ip):
+            log_entry.is_blacklisted = True
+            await soar_service.record_block_hit(log_entry.source_ip, db)
+
         # ML anomaly scoring
         anomaly_score = await model_manager.score_log(log_dict)
 
@@ -65,14 +79,20 @@ class LogService:
                 log_entry_id=log_entry.id,
             )
 
-        # Rule-based evaluation
-        rule_matches = rule_engine.evaluate(log_dict)
+        # Rule-based evaluation (now async with Redis state)
+        rule_matches = await rule_engine.evaluate(log_dict)
         for match in rule_matches:
             match.log_entry_id = log_entry.id
             await alert_service.create_from_rule_match(db=db, match=match, log_dict=log_dict)
 
+        model_manager.notify_ingested(1)
+
         await db.commit()
         await db.refresh(log_entry)
+
+        # Async TI enrichment for the log entry (non-blocking background task)
+        asyncio.create_task(self._enrich_log_with_ti(log_entry.id, log_entry.source_ip))
+
         return log_entry, anomaly_score
 
     async def ingest_bulk(
@@ -103,6 +123,15 @@ class LogService:
         for entry, log_dict, score in zip(log_entries, log_dicts, scores):
             log_dict["id"] = entry.id
 
+            # Update behavioral profiles (Redis, fast)
+            await behavioral_profile_service.update_ip(entry.source_ip, log_dict)
+            if entry.username:
+                await behavioral_profile_service.update_user(entry.username, log_dict)
+
+            # Blacklist check
+            if await soar_service.is_blocked(entry.source_ip):
+                entry.is_blacklisted = True
+
             if score >= settings.ANOMALY_THRESHOLD:
                 anomaly = Anomaly(
                     log_entry_id=entry.id,
@@ -114,19 +143,27 @@ class LogService:
                 db.add(anomaly)
                 anomalies_created += 1
 
-            # Rule evaluation (lightweight, synchronous)
-            matches = rule_engine.evaluate(log_dict)
+            # Rule evaluation (async, Redis-backed)
+            matches = await rule_engine.evaluate(log_dict)
             for match in matches:
                 match.log_entry_id = entry.id
                 await alert_service.create_from_rule_match(db=db, match=match, log_dict=log_dict)
                 alerts_created += 1
 
         await db.commit()
+        model_manager.notify_ingested(len(log_entries))
+
+        # Trigger background retraining if threshold reached (use fresh session)
+        if model_manager.should_retrain():
+            asyncio.create_task(model_manager._safe_retrain())
+
+        # Invalidate cached dashboard stats
+        await cache_service.invalidate_dashboard()
 
         return {
-            "ingested": len(log_entries),
+            "ingested":           len(log_entries),
             "anomalies_detected": anomalies_created,
-            "alerts_created": alerts_created,
+            "alerts_created":     alerts_created,
         }
 
     async def parse_and_ingest_file(
@@ -481,6 +518,38 @@ class LogService:
             ))
 
         return await self.ingest_bulk(db, logs)
+
+
+    async def _enrich_log_with_ti(self, log_id: int, source_ip: str):
+        """
+        Background task: fetch TI data and write geo/reputation fields to the log entry.
+        Uses its own DB session to avoid session-lifetime issues.
+        """
+        try:
+            from app.core.database import AsyncSessionLocal
+            from app.services.threat_intel_service import threat_intel_service
+
+            async with AsyncSessionLocal() as session:
+                result = await session.execute(
+                    select(LogEntry).where(LogEntry.id == log_id)
+                )
+                entry = result.scalar_one_or_none()
+                if not entry:
+                    return
+
+                ti = await threat_intel_service.lookup(source_ip, session)
+                entry.country_code      = ti.country_code or entry.country_code
+                entry.geo_city          = ti.city
+                entry.geo_isp           = ti.isp
+                entry.geo_asn           = ti.asn
+                entry.latitude          = ti.latitude or None
+                entry.longitude         = ti.longitude or None
+                entry.threat_reputation = ti.reputation_score
+                entry.is_known_bad_ip   = ti.is_known_bad
+
+                await session.commit()
+        except Exception as exc:
+            logger.debug("TI enrichment for log %d failed: %s", log_id, exc)
 
 
 log_service = LogService()

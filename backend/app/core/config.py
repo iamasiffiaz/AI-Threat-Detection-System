@@ -9,8 +9,8 @@ from typing import List
 
 class Settings(BaseSettings):
     # Application
-    APP_NAME: str = "AI Threat Detection System"
-    APP_VERSION: str = "1.0.0"
+    APP_NAME: str = "AI SOC Platform"
+    APP_VERSION: str = "2.0.0"
     DEBUG: bool = False
     ENVIRONMENT: str = "production"
 
@@ -55,6 +55,19 @@ class Settings(BaseSettings):
     # File Upload
     MAX_UPLOAD_SIZE_MB: int = 50
     ALLOWED_UPLOAD_EXTENSIONS: List[str] = [".csv", ".json", ".log", ".txt"]
+
+    # Threat Intelligence
+    ABUSEIPDB_API_KEY: str = ""           # Optional — leave blank to skip AbuseIPDB lookups
+
+    # SOAR
+    AUTO_BLOCK_RISK_THRESHOLD: float = 85.0  # Risk score above which IPs are auto-blocked
+
+    # Correlation Engine
+    INCIDENT_BURST_THRESHOLD:     int   = 3      # Alerts in 5 min to auto-create incident
+    INCIDENT_AUTO_RISK_THRESHOLD: float = 85.0   # Single alert risk score for auto-incident
+
+    # Multi-tenant
+    MULTI_TENANT_ENABLED: bool = False
 
     class Config:
         env_file = ".env"

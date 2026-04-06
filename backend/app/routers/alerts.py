@@ -1,17 +1,21 @@
 """
 Alerts router: retrieve, update, and analyze security alerts.
 """
+import asyncio
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy import select
 from typing import Optional
 from datetime import datetime
 from app.core.database import get_db
 from app.core.dependencies import get_current_active_user, require_analyst_or_admin
 from app.models.user import User
-from app.models.alert import AlertSeverity, AlertStatus, AlertType
+from app.models.alert import Alert, AlertSeverity, AlertStatus, AlertType
+from app.models.log_entry import LogEntry
 from app.schemas.alert import AlertResponse, AlertUpdate, AlertSummary
 from app.services.alert_service import alert_service
 from app.services.llm_service import llm_service
+from app.services.rule_engine import RuleMatch
 
 router = APIRouter(prefix="/alerts", tags=["Security Alerts"])
 
@@ -66,9 +70,6 @@ async def get_alert(
     current_user: User = Depends(get_current_active_user),
 ):
     """Get a single alert by ID."""
-    from sqlalchemy import select
-    from app.models.alert import Alert
-
     result = await db.execute(select(Alert).where(Alert.id == alert_id))
     alert = result.scalar_one_or_none()
     if not alert:
@@ -102,10 +103,6 @@ async def analyze_alert_with_llm(
     Trigger LLM analysis for a specific alert.
     Generates detailed threat explanation, attack type, and mitigation steps.
     """
-    from sqlalchemy import select
-    from app.models.alert import Alert
-    from app.models.log_entry import LogEntry
-
     result = await db.execute(select(Alert).where(Alert.id == alert_id))
     alert = result.scalar_one_or_none()
     if not alert:
@@ -147,3 +144,58 @@ async def analyze_alert_with_llm(
     })
 
     return analysis
+
+
+@router.post("/reanalyze-all", response_model=dict)
+async def reanalyze_all_alerts(
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_analyst_or_admin),
+):
+    """
+    Re-trigger LLM analysis for all alerts that have fallback/missing explanations.
+    Runs enrichment as background tasks and returns immediately.
+    """
+    result = await db.execute(select(Alert))
+    alerts = result.scalars().all()
+
+    queued = 0
+    for alert in alerts:
+        if not alert.llm_explanation or "Manual investigation recommended" in (alert.llm_explanation or ""):
+            log_dict = None
+            if alert.log_entry_id:
+                log_result = await db.execute(
+                    select(LogEntry).where(LogEntry.id == alert.log_entry_id)
+                )
+                log = log_result.scalar_one_or_none()
+                if log:
+                    log_dict = {
+                        "source_ip": log.source_ip,
+                        "destination_ip": log.destination_ip,
+                        "destination_port": log.destination_port,
+                        "protocol": log.protocol.value if log.protocol else None,
+                        "event_type": log.event_type,
+                        "severity": log.severity.value if log.severity else None,
+                        "message": log.message,
+                    }
+
+            asyncio.create_task(
+                alert_service._enrich_alert_with_llm(
+                    alert.id,
+                    RuleMatch(
+                        rule_name=alert.rule_name or "unknown",
+                        title=alert.title,
+                        description=alert.description,
+                        severity=alert.severity,
+                        source_ip=alert.source_ip,
+                        context={"anomaly_score": alert.anomaly_score or 0},
+                    ),
+                    log_dict,
+                )
+            )
+            queued += 1
+
+    return {
+        "queued": queued,
+        "total": len(alerts),
+        "message": f"Re-analysis queued for {queued} alert(s). Results will appear shortly.",
+    }
