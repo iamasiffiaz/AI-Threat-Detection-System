@@ -1,4 +1,4 @@
-﻿# AI Threat Detection System
+# AI Threat Detection System
 ### Enterprise SOC Platform — v2.0.0
 
 > **Production-ready Security Operations Center (SOC) platform** with ML-powered anomaly detection, SIEM-style rule engine, LLM threat explanation, automated incident response, threat intelligence, SOAR automation, behavioral profiling, attack classification, and real-time dashboards.
