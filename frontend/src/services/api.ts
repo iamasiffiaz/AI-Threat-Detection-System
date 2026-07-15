@@ -124,7 +124,10 @@ export const incidentsApi = {
   getSummary: () => api.get('/incidents/summary'),
   getById: (id: number) => api.get(`/incidents/${id}`),
   getTimeline: (id: number) => api.get(`/incidents/${id}/timeline`),
+  create: (data: unknown) => api.post('/incidents', data),
   update: (id: number, data: unknown) => api.patch(`/incidents/${id}`, data),
+  assign: (id: number, assigned_to: string) => api.post(`/incidents/${id}/assign`, { assigned_to }),
+  setStatus: (id: number, status: string) => api.post(`/incidents/${id}/status`, { status }),
   escalate: (id: number) => api.post(`/incidents/${id}/escalate`),
   delete: (id: number) => api.delete(`/incidents/${id}`),
 }
@@ -199,3 +202,73 @@ export const systemApi = {
   status: () => api.get('/status'),
   health: () => axios.get('/health'),
 }
+
+// ─── Threat Feeds API ─────────────────────────────────────────────────────────
+
+export const threatFeedsApi = {
+  getAll: (params?: Record<string, unknown>) => api.get('/threat-feeds', { params }),
+  getById: (id: number) => api.get(`/threat-feeds/${id}`),
+  createManual: (data: unknown) => api.post('/threat-feeds/manual', data),
+  importMock: () => api.post('/threat-feeds/import', null, { params: { mock: true } }),
+  importFile: (file: File) => {
+    const formData = new FormData()
+    formData.append('file', file)
+    return api.post('/threat-feeds/import', formData, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+    })
+  },
+  delete: (id: number) => api.delete(`/threat-feeds/${id}`),
+}
+
+// ─── IOC Extraction API ───────────────────────────────────────────────────────
+
+export const iocsApi = {
+  extract: (data: {
+    text: string
+    alert_id?: number
+    incident_id?: number
+    persist?: boolean
+    source_context?: string
+  }) => api.post('/iocs/extract', data),
+}
+
+// ─── MITRE API ────────────────────────────────────────────────────────────────
+
+export const mitreApi = {
+  getMappings: (params?: Record<string, unknown>) => api.get('/mitre/mappings', { params }),
+  mapAlert: (alertId: number) => api.post(`/mitre/map-alert/${alertId}`),
+  mapIncident: (incidentId: number) => api.post(`/mitre/map-incident/${incidentId}`),
+  getIncident: (incidentId: number) => api.get(`/mitre/incident/${incidentId}`),
+}
+
+// ─── Analyst Notes API ────────────────────────────────────────────────────────
+
+export const notesApi = {
+  getAll: (params?: Record<string, unknown>) => api.get('/analyst-notes', { params }),
+  create: (data: unknown) => api.post('/analyst-notes', data),
+  update: (id: number, data: unknown) => api.put(`/analyst-notes/${id}`, data),
+  delete: (id: number) => api.delete(`/analyst-notes/${id}`),
+}
+
+// ─── Reports API ──────────────────────────────────────────────────────────────
+
+export const reportsApi = {
+  getAll: () => api.get('/reports'),
+  getById: (id: number) => api.get(`/reports/${id}`),
+  generate: (incidentId: number) => api.post(`/reports/generate/${incidentId}`),
+  downloadUrl: (id: number) => `${BASE_URL}/reports/${id}/download`,
+}
+
+// ─── SOC Platform 2.0 API ─────────────────────────────────────────────────────
+
+export const socApi = {
+  scoreAlert: (alertId: number) => api.post(`/soc/severity/score-alert/${alertId}`),
+  explainAlert: (alertId: number) => api.post(`/soc/explain/alert/${alertId}`),
+  explainIncident: (incidentId: number) => api.post(`/soc/explain/incident/${incidentId}`),
+  getTimeline: (incidentId: number) => api.get(`/soc/timeline/${incidentId}`),
+  reconstructTimeline: (incidentId: number) => api.post(`/soc/timeline/${incidentId}/reconstruct`),
+  getSettings: () => api.get('/soc/settings'),
+  updateSettings: (data: unknown) => api.put('/soc/settings', data),
+  dashboardStats: (role?: string) => api.get('/soc/dashboard-stats', { params: { role } }),
+}
+

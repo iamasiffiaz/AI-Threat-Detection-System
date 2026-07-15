@@ -61,6 +61,12 @@ class Incident(Base):
     assigned_to: Mapped[str] = mapped_column(String(100), nullable=True)
     tenant_id:   Mapped[int] = mapped_column(Integer, nullable=True, index=True)
 
+    # SOC Platform 2.0 enrichment
+    affected_assets: Mapped[str] = mapped_column(Text, nullable=True)  # JSON list
+    related_iocs:    Mapped[str] = mapped_column(Text, nullable=True)  # JSON list
+    closed_date:     Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=True)
+    business_impact: Mapped[str] = mapped_column(Text, nullable=True)
+
     # Timeline
     first_seen:  Mapped[datetime] = mapped_column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc), index=True, nullable=False)
     last_seen:   Mapped[datetime] = mapped_column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc), nullable=False)

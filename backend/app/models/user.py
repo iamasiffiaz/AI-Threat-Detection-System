@@ -10,7 +10,11 @@ from app.core.database import Base
 
 class UserRole(str, enum.Enum):
     ADMIN = "admin"
-    ANALYST = "analyst"
+    ANALYST = "analyst"  # legacy alias kept for compatibility
+    SOC_ANALYST = "soc_analyst"
+    SOC_MANAGER = "soc_manager"
+    THREAT_INTEL_ANALYST = "threat_intel_analyst"
+    EXECUTIVE_VIEWER = "executive_viewer"
 
 
 class User(Base):
@@ -22,7 +26,9 @@ class User(Base):
     hashed_password: Mapped[str] = mapped_column(String(255), nullable=False)
     full_name: Mapped[str] = mapped_column(String(100), nullable=True)
     role: Mapped[UserRole] = mapped_column(
-        SAEnum(UserRole), default=UserRole.ANALYST, nullable=False
+        SAEnum(UserRole, native_enum=False, values_callable=lambda x: [e.value for e in x]),
+        default=UserRole.ANALYST,
+        nullable=False,
     )
     is_active: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
     created_at: Mapped[datetime] = mapped_column(

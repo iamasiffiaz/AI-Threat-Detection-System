@@ -1,6 +1,6 @@
 import { useNavigate } from 'react-router-dom'
 import { formatRelativeTime } from '../../utils/formatters'
-import { SeverityBadge } from '../Common/SeverityBadge'
+import { SeverityBadge } from '../common/SeverityBadge'
 import { AlertTriangle, ChevronRight } from 'lucide-react'
 
 interface RecentAlert {

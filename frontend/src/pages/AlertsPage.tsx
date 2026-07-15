@@ -1,11 +1,14 @@
 import { useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { Bell, RefreshCw, Search, Filter, ExternalLink, Shield, Globe, Zap } from 'lucide-react'
-import { alertsApi, socAssistantApi, soarApi } from '../services/api'
+import { alertsApi, socAssistantApi, soarApi, socApi } from '../services/api'
 import { type Alert, type AlertSeverity, type AlertStatus } from '../types'
 import { LoadingSpinner } from '../components/common/LoadingSpinner'
 import { SeverityBadge } from '../components/common/SeverityBadge'
 import { RiskBadge } from '../components/common/RiskBadge'
+import { IOCExtractionPanel } from '../components/soc/IOCExtractionPanel'
+import { AnalystNotesPanel } from '../components/soc/AnalystNotesPanel'
+import { MitrePanel } from '../components/soc/MitrePanel'
 import { format } from 'date-fns'
 import toast from 'react-hot-toast'
 
@@ -160,6 +163,20 @@ function AlertDetailPanel({ alert, onClose }: { alert: Alert; onClose: () => voi
             </div>
           )}
 
+          {(alert as Alert & { severity_reason?: string }).severity_reason && (
+            <div className="bg-soc-panel border border-soc-border rounded-lg p-3">
+              <p className="text-xs text-cyber-400 mb-1">Severity Reasoning</p>
+              <p className="text-sm text-soc-muted">{(alert as Alert & { severity_reason?: string }).severity_reason}</p>
+            </div>
+          )}
+
+          <MitrePanel alertId={alert.id} />
+          <IOCExtractionPanel
+            alertId={alert.id}
+            initialText={`${alert.title}\n${alert.description}\n${alert.source_ip || ''}`}
+          />
+          <AnalystNotesPanel alertId={alert.id} />
+
           {/* Actions */}
           <div className="flex flex-wrap gap-2 pt-2 border-t border-gray-800">
             {['investigating', 'resolved', 'false_positive'].map(s => (
@@ -179,6 +196,20 @@ function AlertDetailPanel({ alert, onClose }: { alert: Alert; onClose: () => voi
                 Block IP
               </button>
             )}
+            <button
+              onClick={async () => {
+                try {
+                  const { data } = await socApi.scoreAlert(alert.id)
+                  toast.success(`Rescored: ${data.severity} (${data.risk_score})`)
+                  queryClient.invalidateQueries({ queryKey: ['alerts'] })
+                } catch {
+                  toast.error('Scoring failed')
+                }
+              }}
+              className="text-xs px-3 py-1.5 rounded-lg bg-cyber-500/10 border border-cyber-500/30 text-cyber-300"
+            >
+              Re-score Severity
+            </button>
           </div>
         </div>
       </div>

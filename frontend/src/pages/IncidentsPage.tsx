@@ -1,11 +1,15 @@
 import { useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { Siren, ChevronDown, Globe, Shield, Clock, ArrowUp } from 'lucide-react'
-import { incidentsApi, socAssistantApi } from '../services/api'
+import { incidentsApi, socAssistantApi, reportsApi } from '../services/api'
 import { type Incident, type IncidentStatus, type IncidentSeverity } from '../types'
 import { LoadingSpinner } from '../components/common/LoadingSpinner'
 import { SeverityBadge } from '../components/common/SeverityBadge'
 import { RiskBadge } from '../components/common/RiskBadge'
+import { IOCExtractionPanel } from '../components/soc/IOCExtractionPanel'
+import { AnalystNotesPanel } from '../components/soc/AnalystNotesPanel'
+import { MitrePanel } from '../components/soc/MitrePanel'
+import { TimelinePanel } from '../components/soc/TimelinePanel'
 import { format, formatDistanceToNow } from 'date-fns'
 import toast from 'react-hot-toast'
 
@@ -168,7 +172,7 @@ function IncidentDetail({ incident, onClose }: { incident: Incident; onClose: ()
           {/* Alert Timeline */}
           {Array.isArray(timeline) && timeline.length > 0 && (
             <div>
-              <p className="text-xs text-gray-500 mb-2">Alert Timeline ({timeline.length})</p>
+              <p className="text-xs text-gray-500 mb-2">Related Alerts ({timeline.length})</p>
               <div className="space-y-1.5 max-h-48 overflow-y-auto">
                 {timeline.map((a: { id: number; title: string; severity: string; risk_score?: number | null; attack_type?: string | null; triggered_at: string }) => (
                   <div key={a.id} className="flex items-center gap-3 p-2 rounded bg-gray-800/60">
@@ -183,6 +187,14 @@ function IncidentDetail({ incident, onClose }: { incident: Incident; onClose: ()
               </div>
             </div>
           )}
+
+          <TimelinePanel incidentId={incident.id} />
+          <MitrePanel incidentId={incident.id} />
+          <IOCExtractionPanel
+            incidentId={incident.id}
+            initialText={`${incident.title}\n${incident.description || ''}\n${incident.source_ip || ''}`}
+          />
+          <AnalystNotesPanel incidentId={incident.id} />
 
           {/* Actions */}
           <div className="flex flex-wrap gap-2 pt-2 border-t border-gray-800">
@@ -201,6 +213,19 @@ function IncidentDetail({ incident, onClose }: { incident: Incident; onClose: ()
             >
               <ArrowUp className="w-3 h-3" />
               Escalate
+            </button>
+            <button
+              onClick={async () => {
+                try {
+                  await reportsApi.generate(incident.id)
+                  toast.success('Incident report generated')
+                } catch {
+                  toast.error('Report generation failed')
+                }
+              }}
+              className="text-xs px-3 py-1.5 rounded-lg bg-cyber-500/10 border border-cyber-500/30 text-cyber-300 hover:bg-cyber-500/20 transition-colors"
+            >
+              Generate Report
             </button>
           </div>
         </div>

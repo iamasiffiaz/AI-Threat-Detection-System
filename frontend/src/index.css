@@ -2,51 +2,136 @@
 @tailwind components;
 @tailwind utilities;
 
+:root {
+  --saas-canvas: #0B1220;
+  --saas-panel: #121A2B;
+  --saas-card: #182234;
+  --saas-border: #2A3548;
+  --saas-text: #F1F5F9;
+  --saas-muted: #A8B3C7;
+  --saas-brand: #3B82F6;
+  --saas-brand-soft: rgba(59, 130, 246, 0.12);
+}
+
 @layer base {
   * {
     box-sizing: border-box;
   }
 
   html {
-    font-family: 'Inter', system-ui, sans-serif;
+    font-family: 'IBM Plex Sans', system-ui, sans-serif;
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
+    text-rendering: optimizeLegibility;
   }
 
   body {
-    @apply bg-gray-950 text-gray-100;
+    @apply bg-soc-bg text-soc-text;
     margin: 0;
+    /* Soft depth — professional SaaS canvas, not neon atmosphere */
+    background-image:
+      radial-gradient(ellipse 90% 55% at 0% -10%, rgba(37, 99, 235, 0.14), transparent 55%),
+      radial-gradient(ellipse 70% 45% at 100% 0%, rgba(14, 165, 233, 0.06), transparent 45%),
+      linear-gradient(180deg, #0B1220 0%, #0E1524 55%, #0B1220 100%);
+    min-height: 100vh;
+    color: var(--saas-text);
   }
 
-  /* Custom scrollbar */
+  ::selection {
+    background: rgba(59, 130, 246, 0.35);
+    color: #F8FAFC;
+  }
+
   ::-webkit-scrollbar {
-    width: 6px;
-    height: 6px;
+    width: 8px;
+    height: 8px;
   }
   ::-webkit-scrollbar-track {
-    @apply bg-gray-900;
+    background: transparent;
   }
   ::-webkit-scrollbar-thumb {
-    @apply bg-gray-700 rounded-full;
+    background: #2A3548;
+    border-radius: 999px;
+    border: 2px solid transparent;
+    background-clip: padding-box;
   }
   ::-webkit-scrollbar-thumb:hover {
-    @apply bg-gray-600;
+    background: #3D4B63;
+    background-clip: padding-box;
   }
 }
 
 @layer components {
-  /* Monospace numbers for IP addresses and metrics */
   .font-mono-nums {
-    font-family: 'JetBrains Mono', 'Fira Code', monospace;
+    font-family: 'IBM Plex Mono', ui-monospace, monospace;
     font-variant-numeric: tabular-nums;
   }
 
-  /* Glowing border effect for critical alerts */
+  .soc-card {
+    @apply bg-soc-card border border-soc-border rounded-xl shadow-card;
+  }
+
+  .soc-panel {
+    @apply bg-soc-panel border border-soc-border rounded-xl;
+  }
+
   .border-glow-red {
-    box-shadow: 0 0 0 1px rgba(239, 68, 68, 0.3), 0 0 20px rgba(239, 68, 68, 0.1);
+    box-shadow: 0 0 0 1px rgba(239, 68, 68, 0.35), 0 8px 20px rgba(239, 68, 68, 0.1);
   }
 
   .border-glow-cyber {
-    box-shadow: 0 0 0 1px rgba(30, 190, 242, 0.3), 0 0 20px rgba(30, 190, 242, 0.1);
+    box-shadow: 0 0 0 1px rgba(59, 130, 246, 0.35), 0 8px 20px rgba(59, 130, 246, 0.08);
+  }
+
+  .soc-btn-primary {
+    @apply inline-flex items-center justify-center gap-2 px-4 py-2 rounded-lg text-sm font-semibold
+      bg-cyber-600 text-white border border-cyber-500
+      hover:bg-cyber-500 active:bg-cyber-700
+      transition-colors shadow-sm;
+  }
+
+  .soc-btn-secondary {
+    @apply inline-flex items-center justify-center gap-2 px-4 py-2 rounded-lg text-sm font-medium
+      bg-soc-elevated text-soc-text border border-soc-border
+      hover:bg-soc-card hover:border-cyber-500/40 transition-colors;
+  }
+
+  .soc-input {
+    @apply w-full rounded-lg bg-soc-panel border-soc-border text-soc-text
+      placeholder:text-soc-faint
+      focus:border-cyber-500 focus:ring-2 focus:ring-cyber-500/25
+      text-sm transition-shadow;
+  }
+
+  .page-title {
+    @apply font-display text-2xl font-semibold tracking-tight text-soc-text;
+  }
+
+  .page-subtitle {
+    @apply text-sm text-soc-muted mt-1;
+  }
+
+  .soc-table {
+    @apply w-full text-sm;
+  }
+
+  .soc-table thead tr {
+    @apply text-left text-soc-faint border-b border-soc-border bg-soc-panel/80;
+  }
+
+  .soc-table th {
+    @apply p-3 text-[11px] uppercase tracking-wider font-semibold;
+  }
+
+  .soc-table td {
+    @apply p-3 border-b border-soc-border/50 align-middle;
+  }
+
+  .soc-table tbody tr {
+    @apply hover:bg-soc-elevated/50 transition-colors;
+  }
+
+  .nav-active {
+    @apply bg-cyber-500/12 text-cyber-300 border border-cyber-500/25;
   }
 }

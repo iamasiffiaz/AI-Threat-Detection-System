@@ -1,5 +1,6 @@
 /**
  * Formatting utilities for dates, bytes, and severity levels.
+ * SaaS semantic color tokens (severity ≠ brand).
  */
 import { format, formatDistanceToNow } from 'date-fns'
 
@@ -32,30 +33,56 @@ export function formatScore(score: number | null | undefined): string {
   return (score * 100).toFixed(1) + '%'
 }
 
+/** Semantic severity tokens — distinct from brand blue for scannability */
 export const SEVERITY_COLORS: Record<string, string> = {
-  critical: 'text-red-400 bg-red-400/10 border-red-400/30',
-  high:     'text-orange-400 bg-orange-400/10 border-orange-400/30',
-  medium:   'text-yellow-400 bg-yellow-400/10 border-yellow-400/30',
-  low:      'text-blue-400 bg-blue-400/10 border-blue-400/30',
-  info:     'text-gray-400 bg-gray-400/10 border-gray-400/30',
+  critical: 'text-threat-critical bg-threat-critical/12 border-threat-critical/30',
+  high:     'text-threat-high bg-threat-high/12 border-threat-high/30',
+  medium:   'text-threat-medium bg-threat-medium/12 border-threat-medium/30',
+  low:      'text-threat-low bg-threat-low/12 border-threat-low/30',
+  info:     'text-soc-muted bg-soc-panel border-soc-border',
 }
 
 export const SEVERITY_DOT: Record<string, string> = {
-  critical: 'bg-red-400',
-  high:     'bg-orange-400',
-  medium:   'bg-yellow-400',
-  low:      'bg-blue-400',
-  info:     'bg-gray-400',
+  critical: 'bg-threat-critical',
+  high:     'bg-threat-high',
+  medium:   'bg-threat-medium',
+  low:      'bg-threat-low',
+  info:     'bg-soc-faint',
+}
+
+export const SEVERITY_HEX: Record<string, string> = {
+  critical: '#EF4444',
+  high:     '#F97316',
+  medium:   '#EAB308',
+  low:      '#22C55E',
+}
+
+/** Align with severity scoring service bands: Low 1–39, Medium 40–69, High 70–89, Critical 90–100 */
+export function riskToSeverity(score: number): 'critical' | 'high' | 'medium' | 'low' {
+  if (score >= 90) return 'critical'
+  if (score >= 70) return 'high'
+  if (score >= 40) return 'medium'
+  return 'low'
 }
 
 export const STATUS_COLORS: Record<string, string> = {
-  open:           'text-red-400 bg-red-400/10',
-  investigating:  'text-yellow-400 bg-yellow-400/10',
-  resolved:       'text-green-400 bg-green-400/10',
-  false_positive: 'text-gray-400 bg-gray-400/10',
+  open:           'text-threat-critical bg-threat-critical/10 border-threat-critical/30',
+  investigating:  'text-threat-medium bg-threat-medium/10 border-threat-medium/30',
+  contained:      'text-cyber-400 bg-cyber-500/10 border-cyber-500/30',
+  resolved:       'text-threat-low bg-threat-low/10 border-threat-low/30',
+  false_positive: 'text-soc-faint bg-soc-panel border-soc-border',
 }
 
 export const CHART_COLORS = [
-  '#1ebef2', '#3b82f6', '#8b5cf6', '#ec4899',
-  '#f97316', '#10b981', '#eab308', '#ef4444',
+  '#3B82F6', '#0EA5E9', '#EF4444', '#F97316',
+  '#EAB308', '#22C55E', '#14B8A6', '#94A3B8',
 ]
+
+export const CHART_TOOLTIP_STYLE = {
+  background: '#182234',
+  border: '1px solid #2A3548',
+  borderRadius: '10px',
+  fontSize: '12px',
+  color: '#F1F5F9',
+  boxShadow: '0 8px 24px rgba(0,0,0,0.35)',
+}

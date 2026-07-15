@@ -1,7 +1,8 @@
 version: "3.9"
 
-# ─── AI Threat Detection System ─────────────────────────────────────────────
-# Full-stack SOC platform: FastAPI + React + PostgreSQL + Redis + Ollama
+# ─── AI Threat Intelligence SOC Platform 2.0 ───────────────────────────────
+# Full-stack SOC: FastAPI + React + PostgreSQL + Redis + Ollama
+# Features: threat feeds, IOC extraction, MITRE, severity scoring, reports
 
 services:
 

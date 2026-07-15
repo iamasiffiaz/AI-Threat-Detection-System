@@ -1,4 +1,4 @@
-// Enterprise SOC Platform v2.0
+// AI Threat Intelligence SOC Platform 2.0
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { Toaster } from 'react-hot-toast'
@@ -14,6 +14,10 @@ import { InvestigationPage } from './pages/InvestigationPage'
 import { SOARPage } from './pages/SOARPage'
 import { SOCAssistantPage } from './pages/SOCAssistantPage'
 import EventViewerPage from './pages/EventViewerPage'
+import { ThreatFeedsPage } from './pages/ThreatFeedsPage'
+import { MitrePage } from './pages/MitrePage'
+import { ReportsPage } from './pages/ReportsPage'
+import { SettingsPage } from './pages/SettingsPage'
 import { useAuthStore } from './store/authStore'
 
 const queryClient = new QueryClient({
@@ -51,10 +55,14 @@ export default function App() {
             <Route path="/anomalies"      element={<AnomaliesPage />} />
             <Route path="/incidents"      element={<IncidentsPage />} />
             <Route path="/intelligence"   element={<IntelligencePage />} />
+            <Route path="/threat-feeds"   element={<ThreatFeedsPage />} />
+            <Route path="/mitre"          element={<MitrePage />} />
             <Route path="/investigation"  element={<InvestigationPage />} />
+            <Route path="/reports"        element={<ReportsPage />} />
             <Route path="/soar"           element={<SOARPage />} />
             <Route path="/soc-assistant"  element={<SOCAssistantPage />} />
             <Route path="/event-viewer"   element={<EventViewerPage />} />
+            <Route path="/settings"       element={<SettingsPage />} />
           </Route>
 
           <Route path="*" element={<Navigate to="/" replace />} />
@@ -65,14 +73,15 @@ export default function App() {
         position="top-right"
         toastOptions={{
           style: {
-            background: '#1f2937',
-            color: '#f3f4f6',
-            border: '1px solid #374151',
-            borderRadius: '12px',
+            background: '#182234',
+            color: '#F1F5F9',
+            border: '1px solid #2A3548',
+            borderRadius: '10px',
             fontSize: '14px',
+            boxShadow: '0 8px 24px rgba(0,0,0,0.35)',
           },
-          success: { iconTheme: { primary: '#10b981', secondary: '#1f2937' } },
-          error:   { iconTheme: { primary: '#ef4444', secondary: '#1f2937' } },
+          success: { iconTheme: { primary: '#22C55E', secondary: '#182234' } },
+          error:   { iconTheme: { primary: '#EF4444', secondary: '#182234' } },
         }}
       />
     </QueryClientProvider>

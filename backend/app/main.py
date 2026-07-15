@@ -27,6 +27,7 @@ from app.services.event_viewer_service import event_viewer_service
 from app.routers import auth, logs, alerts, anomalies, dashboard, websocket
 from app.routers import incidents, intelligence, investigation, soar, soc_assistant
 from app.routers import event_viewer
+from app.routers import threat_feeds, iocs, mitre, analyst_notes, reports, soc_platform
 
 # Configure structured logging
 logging.basicConfig(
@@ -111,8 +112,8 @@ app = FastAPI(
     title=settings.APP_NAME,
     version=settings.APP_VERSION,
     description=(
-        "Enterprise AI-Powered SOC Platform with threat intelligence, correlation engine, "
-        "incident management, SOAR automation, behavioral profiling, and LLM analysis."
+        "AI Threat Intelligence SOC Platform 2.0 — threat feeds, IOC extraction, MITRE ATT&CK, "
+        "severity scoring, timeline reconstruction, analyst notes, LLM explanations, and PDF reports."
     ),
     docs_url="/api/docs",
     redoc_url="/api/redoc",
@@ -191,6 +192,14 @@ app.include_router(investigation.router)  # /api/v1/investigation
 app.include_router(soar.router)           # /api/v1/soar
 app.include_router(soc_assistant.router)  # /api/v1/soc-assistant
 app.include_router(event_viewer.router)   # /api/v1/event-viewer
+
+# SOC Platform 2.0 routers
+app.include_router(threat_feeds.router)
+app.include_router(iocs.router)
+app.include_router(mitre.router)
+app.include_router(analyst_notes.router)
+app.include_router(reports.router)
+app.include_router(soc_platform.router)
 
 
 # --- Health & Status Endpoints ---

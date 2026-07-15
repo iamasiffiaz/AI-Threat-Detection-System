@@ -42,3 +42,16 @@ Thumbs.db
 # Logs
 *.log
 logs/
+
+# Generated incident reports
+backend/data/reports/
+*.pdf
+
+# Local secrets
+backend/.env
+frontend/.env
+
+# Temp local tools
+frontend/capture_screenshots.mjs
+scripts/capture_screenshots.mjs
+

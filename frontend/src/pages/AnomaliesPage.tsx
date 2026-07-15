@@ -1,7 +1,7 @@
 import { useQuery } from '@tanstack/react-query'
 import { anomaliesApi } from '../services/api'
 import { Header } from '../components/Layout/Header'
-import { PageLoader } from '../components/Common/LoadingSpinner'
+import { PageLoader } from '../components/common/LoadingSpinner'
 import { AnomalyTrendChart } from '../components/Dashboard/AnomalyTrendChart'
 import { formatDate, formatScore } from '../utils/formatters'
 import type { Anomaly } from '../types'

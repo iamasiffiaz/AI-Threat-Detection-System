@@ -1,5 +1,5 @@
 import clsx from 'clsx'
-import { SEVERITY_COLORS } from '../../utils/formatters'
+import { SEVERITY_COLORS, SEVERITY_DOT, STATUS_COLORS } from '../../utils/formatters'
 
 interface SeverityBadgeProps {
   severity: string
@@ -7,20 +7,15 @@ interface SeverityBadgeProps {
 }
 
 export function SeverityBadge({ severity, size = 'sm' }: SeverityBadgeProps) {
+  const key = (severity || 'info').toLowerCase()
   return (
     <span className={clsx(
-      'inline-flex items-center gap-1.5 font-medium rounded-md border capitalize',
-      SEVERITY_COLORS[severity] || SEVERITY_COLORS.info,
-      size === 'sm' ? 'text-xs px-2 py-0.5' : 'text-sm px-2.5 py-1'
+      'inline-flex items-center gap-1.5 font-semibold rounded-md border capitalize tracking-wide',
+      SEVERITY_COLORS[key] || SEVERITY_COLORS.info,
+      size === 'sm' ? 'text-[11px] px-2 py-0.5' : 'text-sm px-2.5 py-1'
     )}>
-      <span className={clsx(
-        'w-1.5 h-1.5 rounded-full',
-        severity === 'critical' ? 'bg-red-400' :
-        severity === 'high'     ? 'bg-orange-400' :
-        severity === 'medium'   ? 'bg-yellow-400' :
-        severity === 'low'      ? 'bg-blue-400' : 'bg-gray-400'
-      )} />
-      {severity}
+      <span className={clsx('w-1.5 h-1.5 rounded-full shrink-0', SEVERITY_DOT[key] || SEVERITY_DOT.info)} />
+      {key}
     </span>
   )
 }
@@ -30,18 +25,13 @@ interface StatusBadgeProps {
 }
 
 export function StatusBadge({ status }: StatusBadgeProps) {
-  const colors: Record<string, string> = {
-    open:           'text-red-400 bg-red-400/10 border-red-400/20',
-    investigating:  'text-yellow-400 bg-yellow-400/10 border-yellow-400/20',
-    resolved:       'text-green-400 bg-green-400/10 border-green-400/20',
-    false_positive: 'text-gray-400 bg-gray-800 border-gray-700',
-  }
+  const key = (status || '').toLowerCase()
   return (
     <span className={clsx(
-      'inline-flex items-center text-xs font-medium px-2 py-0.5 rounded-md border capitalize',
-      colors[status] || 'text-gray-400 bg-gray-800 border-gray-700'
+      'inline-flex items-center text-[11px] font-semibold px-2 py-0.5 rounded-md border capitalize tracking-wide',
+      STATUS_COLORS[key] || 'text-soc-faint bg-soc-panel border-soc-border'
     )}>
-      {status.replace('_', ' ')}
+      {key.replace(/_/g, ' ')}
     </span>
   )
 }

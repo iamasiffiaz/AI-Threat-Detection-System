@@ -37,26 +37,39 @@ export function LoginPage() {
   }
 
   return (
-    <div className="min-h-screen bg-gray-950 flex items-center justify-center p-4">
-      {/* Background grid effect */}
-      <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_center,_var(--tw-gradient-stops))] from-cyber-950/30 via-gray-950 to-gray-950 pointer-events-none" />
+    <div className="min-h-screen flex items-center justify-center p-4 relative overflow-hidden">
+      <div className="absolute inset-0 pointer-events-none bg-[radial-gradient(ellipse_at_top,_rgba(59,130,246,0.16),_transparent_55%)]" />
+      <div
+        className="absolute inset-0 opacity-[0.04] pointer-events-none"
+        style={{
+          backgroundImage:
+            'linear-gradient(#2A3548 1px, transparent 1px), linear-gradient(90deg, #2A3548 1px, transparent 1px)',
+          backgroundSize: '40px 40px',
+        }}
+      />
 
-      <div className="relative w-full max-w-md">
-        {/* Logo */}
+      <div className="relative w-full max-w-md animate-fade-in">
         <div className="text-center mb-8">
-          <div className="inline-flex items-center justify-center w-16 h-16 rounded-2xl bg-cyber-500/10 border border-cyber-500/20 mb-4">
-            <Shield className="w-8 h-8 text-cyber-400" />
+          <div className="inline-flex items-center justify-center w-14 h-14 rounded-2xl bg-cyber-500/15 border border-cyber-500/30 mb-4 shadow-card">
+            <Shield className="w-7 h-7 text-cyber-400" />
           </div>
-          <h1 className="text-2xl font-bold text-white">AI Threat Detection</h1>
-          <p className="text-gray-400 mt-1 text-sm">Security Operations Center</p>
+          <p className="text-[11px] uppercase tracking-[0.18em] text-cyber-400 font-semibold">
+            Enterprise Security
+          </p>
+          <h1 className="font-display text-[1.65rem] font-semibold text-soc-text mt-2 tracking-tight">
+            SOC Platform 2.0
+          </h1>
+          <p className="text-soc-muted mt-1.5 text-sm leading-relaxed">
+            AI Threat Intelligence for modern security teams
+          </p>
         </div>
 
-        {/* Login Card */}
-        <div className="bg-gray-900 border border-gray-800 rounded-2xl p-8 shadow-2xl">
-          <h2 className="text-lg font-semibold text-white mb-6">Sign In</h2>
+        <div className="soc-card p-8">
+          <h2 className="text-lg font-semibold text-soc-text mb-1">Sign in</h2>
+          <p className="text-sm text-soc-muted mb-6">Use your analyst credentials to continue</p>
 
           {error && (
-            <div className="flex items-center gap-2 p-3 mb-5 rounded-lg bg-red-500/10 border border-red-500/20 text-red-400 text-sm">
+            <div className="flex items-center gap-2 p-3 mb-5 rounded-lg bg-threat-critical/10 border border-threat-critical/30 text-threat-critical text-sm">
               <AlertCircle className="w-4 h-4 flex-shrink-0" />
               {error}
             </div>
@@ -64,7 +77,7 @@ export function LoginPage() {
 
           <form onSubmit={handleSubmit} className="space-y-4">
             <div>
-              <label htmlFor="username" className="block text-sm font-medium text-gray-300 mb-1.5">
+              <label htmlFor="username" className="block text-sm font-medium text-soc-muted mb-1.5">
                 Username
               </label>
               <input
@@ -75,12 +88,12 @@ export function LoginPage() {
                 placeholder="Enter your username"
                 required
                 autoFocus
-                className="w-full bg-gray-800 border border-gray-700 rounded-lg px-4 py-2.5 text-white placeholder-gray-500 text-sm focus:outline-none focus:border-cyber-500 focus:ring-1 focus:ring-cyber-500/30 transition-colors"
+                className="soc-input"
               />
             </div>
 
             <div>
-              <label htmlFor="password" className="block text-sm font-medium text-gray-300 mb-1.5">
+              <label htmlFor="password" className="block text-sm font-medium text-soc-muted mb-1.5">
                 Password
               </label>
               <div className="relative">
@@ -91,12 +104,13 @@ export function LoginPage() {
                   onChange={(e) => setPassword(e.target.value)}
                   placeholder="Enter your password"
                   required
-                  className="w-full bg-gray-800 border border-gray-700 rounded-lg px-4 py-2.5 pr-10 text-white placeholder-gray-500 text-sm focus:outline-none focus:border-cyber-500 focus:ring-1 focus:ring-cyber-500/30 transition-colors"
+                  className="soc-input pr-10"
                 />
                 <button
                   type="button"
                   onClick={() => setShowPassword(!showPassword)}
-                  className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-500 hover:text-gray-300"
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-soc-faint hover:text-soc-muted"
+                  aria-label={showPassword ? 'Hide password' : 'Show password'}
                 >
                   {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
                 </button>
@@ -106,26 +120,25 @@ export function LoginPage() {
             <button
               type="submit"
               disabled={loading}
-              className="w-full bg-cyber-500 hover:bg-cyber-600 disabled:opacity-50 disabled:cursor-not-allowed text-white font-semibold py-2.5 rounded-lg text-sm transition-colors mt-2"
+              className="w-full bg-cyber-600 hover:bg-cyber-500 disabled:opacity-50 disabled:cursor-not-allowed text-white font-semibold py-2.5 rounded-lg text-sm transition-colors mt-2 shadow-sm"
             >
               {loading ? (
                 <span className="flex items-center justify-center gap-2">
                   <span className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-                  Authenticating...
+                  Signing in…
                 </span>
-              ) : 'Sign In'}
+              ) : 'Sign in'}
             </button>
           </form>
 
-          {/* Demo credentials hint */}
-          <div className="mt-6 p-3 rounded-lg bg-gray-800/50 border border-gray-700/50">
-            <p className="text-xs text-gray-500 font-medium mb-1">Demo Credentials</p>
-            <p className="text-xs text-gray-400 font-mono">Username: admin | Password: Admin1234!</p>
+          <div className="mt-6 p-3 rounded-lg bg-soc-panel/80 border border-soc-border">
+            <p className="text-xs text-soc-faint font-medium mb-1">Demo account</p>
+            <p className="text-xs text-soc-muted font-mono">admin / Admin1234!</p>
           </div>
         </div>
 
-        <p className="text-center text-xs text-gray-600 mt-6">
-          AI Threat Detection System v1.0 — SOC Platform
+        <p className="text-center text-xs text-soc-faint mt-6">
+          AI Threat Intelligence SOC Platform 2.0 — Defensive use only
         </p>
       </div>
     </div>

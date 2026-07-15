@@ -1,64 +1,72 @@
 import { useQuery } from '@tanstack/react-query'
 import {
   Activity, AlertTriangle, Eye, TrendingUp, Shield,
-  Siren, Lock, Globe, Zap, Server,
+  Siren, Lock, Globe, Crosshair, FileBarChart2, Settings, Users,
 } from 'lucide-react'
 import {
   AreaChart, Area, BarChart, Bar, PieChart, Pie, Cell,
   XAxis, YAxis, Tooltip, ResponsiveContainer, Legend,
 } from 'recharts'
-import { dashboardApi, incidentsApi, soarApi } from '../services/api'
-import { LoadingSpinner } from '../components/common/LoadingSpinner'
+import { Link } from 'react-router-dom'
+import { format } from 'date-fns'
+import { dashboardApi, incidentsApi, soarApi, socApi } from '../services/api'
+import { PageLoader, EmptyState, ErrorState } from '../components/common/LoadingSpinner'
 import { SeverityBadge } from '../components/common/SeverityBadge'
 import { RiskBadge } from '../components/common/RiskBadge'
-import { format } from 'date-fns'
-import { Link } from 'react-router-dom'
-
-const SEV_COLORS: Record<string, string> = {
-  critical: '#ef4444',
-  high: '#f97316',
-  medium: '#eab308',
-  low: '#22c55e',
-}
-
-const ATTACK_COLORS = [
-  '#6366f1','#ec4899','#f97316','#eab308','#22c55e',
-  '#06b6d4','#8b5cf6','#14b8a6','#f43f5e','#84cc16',
-]
+import { ROLE_LABELS, useRoleStore, type DashboardRole } from '../store/roleStore'
+import { CHART_TOOLTIP_STYLE, SEVERITY_HEX } from '../utils/formatters'
 
 function StatCard({
-  icon: Icon, label, value, sub, color = 'cyber',
+  icon: Icon, label, value, sub, tone = 'cyan',
 }: {
   icon: React.ElementType
   label: string
   value: string | number
   sub?: string
-  color?: string
+  tone?: 'cyan' | 'crit' | 'high' | 'med' | 'low' | 'blue'
 }) {
-  const colorMap: Record<string, string> = {
-    cyber:  'bg-cyber-500/10  border-cyber-500/20  text-cyber-400',
-    red:    'bg-red-500/10    border-red-500/20    text-red-400',
-    orange: 'bg-orange-500/10 border-orange-500/20 text-orange-400',
-    green:  'bg-green-500/10  border-green-500/20  text-green-400',
-    purple: 'bg-purple-500/10 border-purple-500/20 text-purple-400',
-    blue:   'bg-blue-500/10   border-blue-500/20   text-blue-400',
+  const tones = {
+    cyan: 'bg-cyber-500/10 border-cyber-500/30 text-cyber-400',
+    crit: 'bg-threat-critical/10 border-threat-critical/30 text-threat-critical',
+    high: 'bg-threat-high/10 border-threat-high/30 text-threat-high',
+    med:  'bg-threat-medium/10 border-threat-medium/30 text-threat-medium',
+    low:  'bg-threat-low/10 border-threat-low/30 text-threat-low',
+    blue: 'bg-soc-blue/10 border-soc-blue/30 text-soc-blue',
   }
   return (
-    <div className="bg-gray-800/60 border border-gray-700/50 rounded-xl p-5 flex items-start gap-4">
-      <div className={`p-2.5 rounded-lg border ${colorMap[color]}`}>
-        <Icon className="w-5 h-5" />
+    <div className="soc-card p-4 flex items-start gap-3 hover:border-cyber-500/30 transition-colors">
+      <div className={`p-2 rounded-md border ${tones[tone]}`}>
+        <Icon className="w-4 h-4" />
       </div>
-      <div>
-        <p className="text-2xl font-bold text-white">{value}</p>
-        <p className="text-sm text-gray-400">{label}</p>
-        {sub && <p className="text-xs text-gray-500 mt-0.5">{sub}</p>}
+      <div className="min-w-0">
+        <p className="text-xl font-display font-semibold text-soc-text leading-none">{value}</p>
+        <p className="text-xs text-soc-muted mt-1 truncate">{label}</p>
+        {sub && <p className="text-[10px] text-soc-faint mt-0.5">{sub}</p>}
       </div>
     </div>
   )
 }
 
+function roleCopy(role: DashboardRole) {
+  switch (role) {
+    case 'soc_analyst':
+      return { title: 'Analyst Workbench', blurb: 'Prioritize open alerts, assigned incidents, and investigation tasks.' }
+    case 'soc_manager':
+      return { title: 'SOC Manager Overview', blurb: 'Track severity mix, incident posture, escalations, and team workload.' }
+    case 'threat_intel_analyst':
+      return { title: 'Threat Intelligence Desk', blurb: 'Monitor feed matches, IOC volume, and MITRE technique trends.' }
+    case 'executive_viewer':
+      return { title: 'Executive Risk Summary', blurb: 'High-level risk, critical incidents, and report readiness for leadership.' }
+    default:
+      return { title: 'Platform Administration', blurb: 'Users, settings, feed configuration, and role controls.' }
+  }
+}
+
 export function DashboardPage() {
-  const { data: overview, isLoading } = useQuery({
+  const { dashboardRole } = useRoleStore()
+  const copy = roleCopy(dashboardRole)
+
+  const { data: overview, isLoading, isError, refetch } = useQuery({
     queryKey: ['dashboard-overview'],
     queryFn: () => dashboardApi.getOverview().then(r => r.data),
     refetchInterval: 15_000,
@@ -76,220 +84,327 @@ export function DashboardPage() {
     refetchInterval: 60_000,
   })
 
-  if (isLoading) return <LoadingSpinner />
+  const { data: socStats } = useQuery({
+    queryKey: ['soc-dashboard-stats', dashboardRole],
+    queryFn: () => socApi.dashboardStats(dashboardRole).then(r => r.data),
+    refetchInterval: 20_000,
+  })
+
+  if (isLoading) return <PageLoader message="Loading command center…" />
+  if (isError) return <div className="p-6"><ErrorState message="Dashboard failed to load" onRetry={() => refetch()} /></div>
 
   const d = overview
-  const severityData = Object.entries(d?.alerts?.by_severity ?? {}).map(([k, v]) => ({
+  const severityData = Object.entries(socStats?.alert_severity_chart ?? d?.alerts?.by_severity ?? {}).map(([k, v]) => ({
     name: k.charAt(0).toUpperCase() + k.slice(1),
     value: v as number,
-    color: SEV_COLORS[k] ?? '#6b7280',
+    color: SEVERITY_HEX[k] ?? '#64748B',
   }))
+
+  const statusData = Object.entries(socStats?.incident_status_chart ?? {}).map(([k, v]) => ({
+    name: k.replace(/_/g, ' '),
+    value: v as number,
+  }))
+
+  const mitreData = Object.entries(socStats?.mitre_tactics_detected ?? {}).map(([name, value]) => ({ name, value: value as number }))
+  const iocTypeData = Object.entries(socStats?.top_ioc_types ?? {}).map(([name, value]) => ({ name, value: value as number }))
 
   const timeline = (d?.charts?.traffic_timeline ?? []).map((t: { timestamp: string; count: number }) => ({
     time: format(new Date(t.timestamp), 'HH:mm'),
     logs: t.count,
   }))
 
+  const showAnalyst = dashboardRole === 'soc_analyst'
+  const showManager = dashboardRole === 'soc_manager'
+  const showIntel = dashboardRole === 'threat_intel_analyst'
+  const showExec = dashboardRole === 'executive_viewer'
+  const showAdmin = dashboardRole === 'admin'
+
   return (
-    <div className="p-6 space-y-6">
-      {/* Header */}
-      <div className="flex items-center justify-between">
+    <div className="p-4 sm:p-6 space-y-5 animate-fade-in">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
         <div>
-          <h1 className="text-2xl font-bold text-white">SOC Dashboard</h1>
-          <p className="text-sm text-gray-400 mt-0.5">
-            Enterprise Threat Detection Platform
-          </p>
+          <p className="text-[10px] uppercase tracking-[0.2em] text-cyber-400 font-semibold">Enterprise SOC</p>
+          <h1 className="page-title mt-1">{copy.title}</h1>
+          <p className="text-sm text-soc-muted mt-0.5">{copy.blurb}</p>
         </div>
-        <div className="flex items-center gap-2 px-3 py-2 rounded-lg bg-gray-800 border border-gray-700">
-          <span className="w-2 h-2 rounded-full bg-green-400 animate-pulse" />
-          <span className="text-xs text-gray-300">Live</span>
-          {d?.system?.llm_available && (
-            <>
-              <span className="text-gray-600">·</span>
-              <span className="text-xs text-cyber-400">AI Active</span>
-            </>
-          )}
+        <div className="flex items-center gap-2 px-3 py-2 rounded-lg soc-card">
+          <span className="px-2 py-0.5 rounded text-[11px] border border-cyber-500/40 bg-cyber-500/10 text-cyber-300 font-semibold">
+            {ROLE_LABELS[dashboardRole]}
+          </span>
+          <span className="w-2 h-2 rounded-full bg-threat-low animate-pulse" />
+          <span className="text-xs text-soc-muted">Live</span>
         </div>
       </div>
 
-      {/* Top Stats */}
-      <div className="grid grid-cols-2 md:grid-cols-4 xl:grid-cols-6 gap-4">
-        <StatCard icon={Activity}       label="Logs (24h)"       value={d?.logs?.last_24h ?? 0}           color="cyber"  />
-        <StatCard icon={AlertTriangle}  label="Open Alerts"      value={d?.alerts?.open ?? 0}              color="orange" />
-        <StatCard icon={Siren}          label="Open Incidents"   value={incidentSummary?.open ?? 0}        color="red"    />
-        <StatCard icon={Eye}            label="Critical Alerts"  value={d?.alerts?.critical ?? 0}          color="red"    />
-        <StatCard icon={Lock}           label="Blocked IPs"      value={soarStats?.active_blocks ?? 0}     color="purple" />
-        <StatCard icon={Globe}          label="Block Hits"       value={soarStats?.total_block_hits ?? 0}  color="blue"   />
+      {/* Shared KPI strip — order/priority changes by role */}
+      <div className="grid grid-cols-2 md:grid-cols-4 xl:grid-cols-8 gap-3">
+        {(showExec || showManager) && (
+          <StatCard icon={Eye} label="Critical Alerts" value={socStats?.critical_alerts ?? 0} tone="crit" />
+        )}
+        <StatCard icon={AlertTriangle} label="Total Alerts" value={socStats?.total_alerts ?? d?.alerts?.total ?? 0} tone="cyan" />
+        <StatCard icon={Siren} label="Open Incidents" value={socStats?.open_incidents ?? incidentSummary?.open ?? 0} tone="high" />
+        {(showIntel || showAnalyst) && (
+          <StatCard icon={Shield} label="IOC Matches" value={socStats?.threat_feed_matches ?? 0} tone="med" />
+        )}
+        <StatCard icon={Globe} label="Threat Feeds" value={socStats?.threat_feed_items ?? 0} tone="blue" />
+        <StatCard icon={TrendingUp} label="Avg Risk" value={socStats?.average_risk_score ?? 0} tone="high" />
+        <StatCard icon={Crosshair} label="MITRE Tactics" value={Object.keys(socStats?.mitre_tactics_detected ?? {}).length} tone="low" />
+        <StatCard icon={Lock} label="Blocked IPs" value={soarStats?.active_blocks ?? 0} tone="crit" />
+        {showAdmin && <StatCard icon={Users} label="Open Alerts" value={socStats?.open_alerts ?? 0} tone="cyan" />}
       </div>
 
-      {/* Incident + Risk row */}
-      {incidentSummary && (
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-          <div className="bg-gray-800/60 border border-gray-700/50 rounded-xl p-5">
-            <div className="flex items-center justify-between mb-4">
-              <h3 className="text-sm font-semibold text-gray-300">Incident Status</h3>
-              <Link to="/incidents" className="text-xs text-cyber-400 hover:text-cyber-300">View all →</Link>
+      {/* Role-specific priority panels */}
+      {showAnalyst && (
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+          <div className="soc-card p-4">
+            <div className="flex items-center justify-between mb-3">
+              <h3 className="text-xs font-semibold text-cyber-300 uppercase tracking-wide">Investigation Queue</h3>
+              <Link to="/alerts" className="text-xs text-cyber-400 hover:text-cyber-300">Open alerts →</Link>
             </div>
-            <div className="space-y-2">
-              {[
-                { label: 'Open',           value: incidentSummary.open,         color: 'bg-red-400' },
-                { label: 'Investigating',  value: incidentSummary.investigating, color: 'bg-orange-400' },
-                { label: 'Resolved',       value: incidentSummary.resolved,      color: 'bg-green-400' },
-              ].map(row => (
-                <div key={row.label} className="flex items-center justify-between">
-                  <div className="flex items-center gap-2">
-                    <span className={`w-2 h-2 rounded-full ${row.color}`} />
-                    <span className="text-sm text-gray-400">{row.label}</span>
+            <div className="space-y-2 max-h-64 overflow-y-auto">
+              {(d?.recent_alerts ?? []).slice(0, 8).map((a: { id: number; title: string; severity: string; risk_score?: number | null; attack_type?: string | null }) => (
+                <div key={a.id} className="flex items-center gap-3 p-2.5 rounded-md bg-soc-panel border border-soc-border/60">
+                  <SeverityBadge severity={a.severity} />
+                  <div className="flex-1 min-w-0">
+                    <p className="text-xs text-soc-text truncate font-medium">{a.title}</p>
+                    <p className="text-[10px] text-soc-faint">{a.attack_type ?? 'triage'}</p>
                   </div>
-                  <span className="text-sm font-semibold text-white">{row.value}</span>
+                  <RiskBadge score={a.risk_score} />
                 </div>
               ))}
-            </div>
-            <div className="mt-4 pt-3 border-t border-gray-700">
-              <div className="flex justify-between text-xs text-gray-500">
-                <span>Avg Risk Score</span>
-                <span className="font-mono text-orange-400">{incidentSummary.avg_risk_score?.toFixed(1)}</span>
-              </div>
+              {!d?.recent_alerts?.length && <EmptyState message="No open investigation items" hint="Generate sample logs or seed demo data." />}
             </div>
           </div>
-
-          {/* Alert Severity Pie */}
-          <div className="bg-gray-800/60 border border-gray-700/50 rounded-xl p-5">
-            <h3 className="text-sm font-semibold text-gray-300 mb-3">Alert Severity Distribution</h3>
-            {severityData.length > 0 ? (
-              <ResponsiveContainer width="100%" height={140}>
-                <PieChart>
-                  <Pie data={severityData} cx="50%" cy="50%" innerRadius={40} outerRadius={60} dataKey="value">
-                    {severityData.map((entry) => (
-                      <Cell key={entry.name} fill={entry.color} />
-                    ))}
-                  </Pie>
-                  <Tooltip
-                    contentStyle={{ background: '#1f2937', border: '1px solid #374151', borderRadius: '8px', fontSize: '12px' }}
-                    formatter={(v: number, name: string) => [v, name]}
-                  />
-                  <Legend iconType="circle" iconSize={8}
-                    formatter={(v) => <span style={{ color: '#9ca3af', fontSize: '12px' }}>{v}</span>}
-                  />
-                </PieChart>
-              </ResponsiveContainer>
-            ) : (
-              <div className="h-36 flex items-center justify-center text-gray-600 text-sm">No alerts yet</div>
-            )}
-          </div>
-
-          {/* System Health */}
-          <div className="bg-gray-800/60 border border-gray-700/50 rounded-xl p-5">
-            <h3 className="text-sm font-semibold text-gray-300 mb-4">System Health</h3>
-            <div className="space-y-3">
-              {[
-                { label: 'ML Model',        ok: d?.model?.is_trained,          detail: d?.model?.algorithm },
-                { label: 'LLM (Ollama)',     ok: d?.system?.llm_available,      detail: 'Threat analysis' },
-                { label: 'Detection Rules',  ok: true,                          detail: '15 active rules' },
-                { label: 'Correlation Eng.', ok: true,                          detail: '4 strategies' },
-                { label: 'SOAR Engine',      ok: true,                          detail: '9 playbooks' },
-              ].map(row => (
-                <div key={row.label} className="flex items-center justify-between">
-                  <div className="flex items-center gap-2">
-                    <span className={`w-2 h-2 rounded-full ${row.ok ? 'bg-green-400' : 'bg-red-400'}`} />
-                    <span className="text-xs text-gray-400">{row.label}</span>
-                  </div>
-                  <span className="text-xs text-gray-600">{row.detail}</span>
-                </div>
-              ))}
+          <div className="soc-card p-4">
+            <div className="flex items-center justify-between mb-3">
+              <h3 className="text-xs font-semibold text-cyber-300 uppercase tracking-wide">Assigned Incidents</h3>
+              <Link to="/incidents" className="text-xs text-cyber-400 hover:text-cyber-300">Incidents →</Link>
+            </div>
+            <div className="space-y-2 text-sm text-soc-muted">
+              <p>Open: <span className="text-soc-text font-semibold">{incidentSummary?.open ?? 0}</span></p>
+              <p>Investigating: <span className="text-threat-medium font-semibold">{incidentSummary?.investigating ?? 0}</span></p>
+              <p>Avg risk: <span className="text-threat-high font-mono">{incidentSummary?.avg_risk_score?.toFixed(1) ?? '—'}</span></p>
+              <p className="text-xs text-soc-faint pt-2 border-t border-soc-border">Use timeline + notes panels on each incident to document investigation steps.</p>
             </div>
           </div>
         </div>
       )}
 
-      {/* Traffic Timeline */}
-      <div className="bg-gray-800/60 border border-gray-700/50 rounded-xl p-5">
-        <h3 className="text-sm font-semibold text-gray-300 mb-4">Log Traffic — Last 24h</h3>
-        {timeline.length > 0 ? (
-          <ResponsiveContainer width="100%" height={180}>
-            <AreaChart data={timeline}>
-              <defs>
-                <linearGradient id="logGrad" x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="5%"  stopColor="#06b6d4" stopOpacity={0.3} />
-                  <stop offset="95%" stopColor="#06b6d4" stopOpacity={0}   />
-                </linearGradient>
-              </defs>
-              <XAxis dataKey="time" tick={{ fill: '#6b7280', fontSize: 11 }} tickLine={false} axisLine={false} />
-              <YAxis tick={{ fill: '#6b7280', fontSize: 11 }} tickLine={false} axisLine={false} />
-              <Tooltip
-                contentStyle={{ background: '#1f2937', border: '1px solid #374151', borderRadius: '8px', fontSize: '12px' }}
-              />
-              <Area type="monotone" dataKey="logs" stroke="#06b6d4" strokeWidth={2} fill="url(#logGrad)" />
-            </AreaChart>
-          </ResponsiveContainer>
-        ) : (
-          <div className="h-44 flex items-center justify-center text-gray-600 text-sm">
-            Ingest logs to see traffic data
+      {showManager && (
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          <div className="soc-card p-4">
+            <h3 className="text-xs font-semibold text-cyber-300 uppercase mb-3">Severity Distribution</h3>
+            {severityData.length ? (
+              <ResponsiveContainer width="100%" height={160}>
+                <PieChart>
+                  <Pie data={severityData} cx="50%" cy="50%" innerRadius={42} outerRadius={62} dataKey="value">
+                    {severityData.map((e) => <Cell key={e.name} fill={e.color} />)}
+                  </Pie>
+                  <Tooltip contentStyle={CHART_TOOLTIP_STYLE} />
+                  <Legend iconType="circle" iconSize={8} formatter={(v) => <span style={{ color: '#9CA3AF', fontSize: 11 }}>{v}</span>} />
+                </PieChart>
+              </ResponsiveContainer>
+            ) : <EmptyState message="No severity data" />}
           </div>
-        )}
-      </div>
-
-      {/* Recent Alerts + ML Info */}
-      <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
-        {/* Recent Alerts */}
-        <div className="bg-gray-800/60 border border-gray-700/50 rounded-xl p-5">
-          <div className="flex items-center justify-between mb-4">
-            <h3 className="text-sm font-semibold text-gray-300">Recent Alerts</h3>
-            <Link to="/alerts" className="text-xs text-cyber-400 hover:text-cyber-300">View all →</Link>
+          <div className="soc-card p-4">
+            <h3 className="text-xs font-semibold text-cyber-300 uppercase mb-3">Incident Status</h3>
+            {statusData.length ? (
+              <ResponsiveContainer width="100%" height={160}>
+                <BarChart data={statusData}>
+                  <XAxis dataKey="name" tick={{ fill: '#64748B', fontSize: 10 }} />
+                  <YAxis tick={{ fill: '#64748B', fontSize: 10 }} />
+                  <Tooltip contentStyle={CHART_TOOLTIP_STYLE} />
+                  <Bar dataKey="value" fill="#3B82F6" radius={[4, 4, 0, 0]} />
+                </BarChart>
+              </ResponsiveContainer>
+            ) : <EmptyState message="No incident status data" />}
           </div>
-          <div className="space-y-2">
-            {(d?.recent_alerts ?? []).slice(0, 8).map((a: { id: number; title: string; severity: string; status: string; risk_score?: number | null; attack_type?: string | null; triggered_at: string }) => (
-              <div key={a.id} className="flex items-center gap-3 p-2.5 rounded-lg bg-gray-900/60 hover:bg-gray-900 transition-colors">
-                <SeverityBadge severity={a.severity as never} />
-                <div className="flex-1 min-w-0">
-                  <p className="text-xs font-medium text-gray-200 truncate">{a.title}</p>
-                  <p className="text-xs text-gray-500">{a.attack_type ?? 'Unknown'}</p>
-                </div>
-                {a.risk_score != null && <RiskBadge score={a.risk_score} />}
-              </div>
-            ))}
-            {!d?.recent_alerts?.length && (
-              <p className="text-center text-gray-600 text-sm py-8">No alerts yet</p>
-            )}
+          <div className="soc-card p-4 space-y-3">
+            <h3 className="text-xs font-semibold text-cyber-300 uppercase">Team Workload</h3>
+            <p className="text-sm text-soc-muted">Critical queue: <span className="text-threat-critical font-semibold">{socStats?.critical_alerts ?? 0}</span></p>
+            <p className="text-sm text-soc-muted">Open incidents: <span className="text-threat-high font-semibold">{socStats?.open_incidents ?? 0}</span></p>
+            <p className="text-sm text-soc-muted">MTTR placeholder: <span className="text-soc-text font-mono">4.2h</span></p>
+            <p className="text-xs text-soc-faint">Escalate critical cases from Incidents → Escalate.</p>
           </div>
         </div>
+      )}
 
-        {/* ML Model info + top anomalous IPs */}
-        <div className="bg-gray-800/60 border border-gray-700/50 rounded-xl p-5">
-          <div className="flex items-center justify-between mb-4">
-            <h3 className="text-sm font-semibold text-gray-300">ML Detection Engine</h3>
-            <span className={`text-xs px-2 py-0.5 rounded-full border ${
-              d?.model?.is_trained
-                ? 'text-green-400 bg-green-500/10 border-green-500/20'
-                : 'text-red-400 bg-red-500/10 border-red-500/20'
-            }`}>
+      {showIntel && (
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+          <div className="soc-card p-4">
+            <div className="flex justify-between mb-3">
+              <h3 className="text-xs font-semibold text-cyber-300 uppercase">Recent IOC Matches</h3>
+              <Link to="/threat-feeds" className="text-xs text-cyber-400">Threat Feeds →</Link>
+            </div>
+            <div className="space-y-2">
+              {(socStats?.recent_ioc_matches ?? []).slice(0, 8).map((ioc: { id: number; ioc_type: string; ioc_value: string; feed_match: boolean }) => (
+                <div key={ioc.id} className="flex items-center gap-2 text-xs font-mono border border-soc-border rounded px-3 py-2 bg-soc-panel">
+                  <span className="text-cyber-400 shrink-0">{ioc.ioc_type}</span>
+                  <span className="text-soc-text truncate flex-1">{ioc.ioc_value}</span>
+                  {ioc.feed_match && <span className="text-threat-critical font-sans font-semibold">MATCH</span>}
+                </div>
+              ))}
+              {!socStats?.recent_ioc_matches?.length && <EmptyState message="No IOC matches yet" hint="Ingest a mock feed and extract IOCs from alerts." />}
+            </div>
+          </div>
+          <div className="soc-card p-4">
+            <h3 className="text-xs font-semibold text-cyber-300 uppercase mb-3">Top IOC Types</h3>
+            {iocTypeData.length ? (
+              <ResponsiveContainer width="100%" height={200}>
+                <BarChart data={iocTypeData}>
+                  <XAxis dataKey="name" tick={{ fill: '#64748B', fontSize: 10 }} />
+                  <YAxis tick={{ fill: '#64748B', fontSize: 10 }} />
+                  <Tooltip contentStyle={CHART_TOOLTIP_STYLE} />
+                  <Bar dataKey="value" fill="#2563EB" radius={[4, 4, 0, 0]} />
+                </BarChart>
+              </ResponsiveContainer>
+            ) : <EmptyState message="No extracted IOCs" />}
+          </div>
+        </div>
+      )}
+
+      {showExec && (
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          <div className="soc-card p-5 border-glow-cyber">
+            <p className="text-[10px] uppercase tracking-widest text-cyber-400">Business Risk</p>
+            <p className="text-3xl font-display text-soc-text mt-2">{socStats?.average_risk_score ?? 0}</p>
+            <p className="text-xs text-soc-muted mt-1">Average composite risk score</p>
+          </div>
+          <div className="soc-card p-5">
+            <p className="text-[10px] uppercase tracking-widest text-threat-critical">Critical Incidents</p>
+            <p className="text-3xl font-display text-threat-critical mt-2">{socStats?.critical_alerts ?? 0}</p>
+            <p className="text-xs text-soc-muted mt-1">Requires leadership visibility</p>
+          </div>
+          <div className="soc-card p-5">
+            <div className="flex items-center justify-between">
+              <p className="text-[10px] uppercase tracking-widest text-cyber-400">Reports</p>
+              <FileBarChart2 className="w-4 h-4 text-cyber-400" />
+            </div>
+            <Link to="/reports" className="soc-btn-primary mt-4 w-full justify-center">Download Report Center</Link>
+            <p className="text-xs text-soc-faint mt-2">Executive-ready PDF/HTML incident packages</p>
+          </div>
+        </div>
+      )}
+
+      {showAdmin && (
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          <Link to="/settings" className="soc-card p-4 hover:border-cyber-500/40 transition-colors">
+            <Settings className="w-5 h-5 text-cyber-400 mb-2" />
+            <p className="text-sm font-semibold text-soc-text">Platform Settings</p>
+            <p className="text-xs text-soc-faint mt-1">Org name, AI provider, severity thresholds</p>
+          </Link>
+          <Link to="/threat-feeds" className="soc-card p-4 hover:border-cyber-500/40 transition-colors">
+            <Globe className="w-5 h-5 text-cyber-400 mb-2" />
+            <p className="text-sm font-semibold text-soc-text">Feed Configuration</p>
+            <p className="text-xs text-soc-faint mt-1">Manual / CSV / JSON / mock ingestion</p>
+          </Link>
+          <div className="soc-card p-4">
+            <Users className="w-5 h-5 text-cyber-400 mb-2" />
+            <p className="text-sm font-semibold text-soc-text">Role Controls</p>
+            <p className="text-xs text-soc-faint mt-1">Use topbar Role View for portfolio demos. JWT RBAC ready on backend.</p>
+          </div>
+        </div>
+      )}
+
+      {/* Shared command charts */}
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+        <div className="soc-card p-4 lg:col-span-1">
+          <h3 className="text-xs font-semibold text-cyber-300 uppercase mb-3">Alert Severity</h3>
+          {severityData.length ? (
+            <ResponsiveContainer width="100%" height={170}>
+              <PieChart>
+                <Pie data={severityData} cx="50%" cy="50%" innerRadius={45} outerRadius={65} dataKey="value">
+                  {severityData.map((e) => <Cell key={e.name} fill={e.color} />)}
+                </Pie>
+                <Tooltip contentStyle={CHART_TOOLTIP_STYLE} />
+                <Legend iconType="circle" iconSize={8} formatter={(v) => <span style={{ color: '#9CA3AF', fontSize: 11 }}>{v}</span>} />
+              </PieChart>
+            </ResponsiveContainer>
+          ) : <EmptyState message="No alerts yet" />}
+        </div>
+        <div className="soc-card p-4 lg:col-span-2">
+          <h3 className="text-xs font-semibold text-cyber-300 uppercase mb-3">Traffic — Last 24h</h3>
+          {timeline.length ? (
+            <ResponsiveContainer width="100%" height={170}>
+              <AreaChart data={timeline}>
+                <defs>
+                  <linearGradient id="logGrad" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="5%" stopColor="#3B82F6" stopOpacity={0.35} />
+                    <stop offset="95%" stopColor="#3B82F6" stopOpacity={0} />
+                  </linearGradient>
+                </defs>
+                <XAxis dataKey="time" tick={{ fill: '#64748B', fontSize: 10 }} tickLine={false} axisLine={false} />
+                <YAxis tick={{ fill: '#64748B', fontSize: 10 }} tickLine={false} axisLine={false} />
+                <Tooltip contentStyle={CHART_TOOLTIP_STYLE} />
+                <Area type="monotone" dataKey="logs" stroke="#3B82F6" strokeWidth={2} fill="url(#logGrad)" />
+              </AreaChart>
+            </ResponsiveContainer>
+          ) : <EmptyState message="Ingest logs to populate traffic" />}
+        </div>
+      </div>
+
+      {(mitreData.length > 0 || showIntel) && (
+        <div className="soc-card p-4">
+          <div className="flex items-center justify-between mb-3">
+            <h3 className="text-xs font-semibold text-cyber-300 uppercase">MITRE Tactics Detected</h3>
+            <Link to="/mitre" className="text-xs text-cyber-400">MITRE page →</Link>
+          </div>
+          {mitreData.length ? (
+            <ResponsiveContainer width="100%" height={180}>
+              <BarChart data={mitreData}>
+                <XAxis dataKey="name" tick={{ fill: '#64748B', fontSize: 10 }} interval={0} angle={-15} textAnchor="end" height={55} />
+                <YAxis tick={{ fill: '#64748B', fontSize: 10 }} />
+                <Tooltip contentStyle={CHART_TOOLTIP_STYLE} />
+                <Bar dataKey="value" fill="#3B82F6" radius={[4, 4, 0, 0]} />
+              </BarChart>
+            </ResponsiveContainer>
+          ) : <EmptyState message="Map alerts to MITRE to populate tactics" />}
+        </div>
+      )}
+
+      <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
+        <div className="soc-card p-4">
+          <div className="flex items-center justify-between mb-3">
+            <h3 className="text-xs font-semibold text-cyber-300 uppercase">Recent Alerts</h3>
+            <Link to="/alerts" className="text-xs text-cyber-400">View all →</Link>
+          </div>
+          <div className="space-y-2">
+            {(d?.recent_alerts ?? []).slice(0, 6).map((a: { id: number; title: string; severity: string; risk_score?: number | null; attack_type?: string | null }) => (
+              <div key={a.id} className="flex items-center gap-3 p-2.5 rounded-md bg-soc-panel/80 border border-soc-border/50">
+                <SeverityBadge severity={a.severity} />
+                <div className="flex-1 min-w-0">
+                  <p className="text-xs font-medium text-soc-text truncate">{a.title}</p>
+                  <p className="text-[10px] text-soc-faint">{a.attack_type ?? 'Unknown'}</p>
+                </div>
+                <RiskBadge score={a.risk_score} />
+              </div>
+            ))}
+            {!d?.recent_alerts?.length && <EmptyState message="No alerts yet" />}
+          </div>
+        </div>
+        <div className="soc-card p-4">
+          <div className="flex items-center justify-between mb-3">
+            <h3 className="text-xs font-semibold text-cyber-300 uppercase">ML Detection Engine</h3>
+            <span className={`text-[11px] px-2 py-0.5 rounded border ${d?.model?.is_trained ? 'text-threat-low border-threat-low/30 bg-threat-low/10' : 'text-threat-critical border-threat-critical/30 bg-threat-critical/10'}`}>
               {d?.model?.is_trained ? 'Trained' : 'Untrained'}
             </span>
           </div>
-          <div className="grid grid-cols-2 gap-3 mb-4">
+          <div className="grid grid-cols-2 gap-2 mb-3">
             {[
-              { label: 'Algorithm',   value: d?.model?.algorithm ?? '—' },
-              { label: 'Samples',     value: d?.model?.training_samples?.toLocaleString() ?? '0' },
-              { label: 'Threshold',   value: d?.model?.threshold?.toFixed(2) ?? '0.60' },
-              { label: 'Total Logs',  value: d?.logs?.total?.toLocaleString() ?? '0' },
-            ].map(item => (
-              <div key={item.label} className="bg-gray-900/60 rounded-lg p-3">
-                <p className="text-xs text-gray-500">{item.label}</p>
-                <p className="text-sm font-semibold text-gray-200 mt-0.5">{item.value}</p>
+              { label: 'Algorithm', value: d?.model?.algorithm ?? '—' },
+              { label: 'Samples', value: d?.model?.training_samples?.toLocaleString() ?? '0' },
+              { label: 'Threshold', value: d?.model?.threshold?.toFixed(2) ?? '0.60' },
+              { label: 'Total Logs', value: d?.logs?.total?.toLocaleString() ?? '0' },
+            ].map((item) => (
+              <div key={item.label} className="bg-soc-panel border border-soc-border rounded-md p-3">
+                <p className="text-[10px] text-soc-faint uppercase tracking-wide">{item.label}</p>
+                <p className="text-sm font-semibold text-soc-text mt-0.5">{item.value}</p>
               </div>
             ))}
           </div>
-          <div>
-            <p className="text-xs text-gray-500 mb-2">Recent Anomalies</p>
-            {(d?.recent_anomalies ?? []).slice(0, 4).map((a: { id: number; source_ip: string | null; anomaly_score: number; detected_at: string }) => (
-              <div key={a.id} className="flex justify-between items-center py-1.5 border-b border-gray-700/50 last:border-0">
-                <span className="text-xs text-gray-400 font-mono">{a.source_ip ?? 'Unknown'}</span>
-                <span className="text-xs font-mono text-orange-400">{a.anomaly_score.toFixed(3)}</span>
-              </div>
-            ))}
-            {!d?.recent_anomalies?.length && (
-              <p className="text-center text-gray-600 text-xs py-4">No anomalies detected</p>
-            )}
+          <div className="flex items-center gap-2 text-xs text-soc-muted">
+            <Activity className="w-3.5 h-3.5 text-cyber-400" />
+            Anomaly + SIEM hybrid detection active
           </div>
         </div>
       </div>

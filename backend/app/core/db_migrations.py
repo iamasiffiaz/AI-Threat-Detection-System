@@ -47,6 +47,19 @@ _LOG_ENTRY_COLUMNS = [
     "ALTER TABLE log_entries ADD COLUMN IF NOT EXISTS tenant_id         INTEGER;",
 ]
 
+_INCIDENT_COLUMNS = [
+    "ALTER TABLE incidents ADD COLUMN IF NOT EXISTS affected_assets TEXT;",
+    "ALTER TABLE incidents ADD COLUMN IF NOT EXISTS related_iocs TEXT;",
+    "ALTER TABLE incidents ADD COLUMN IF NOT EXISTS closed_date TIMESTAMPTZ;",
+    "ALTER TABLE incidents ADD COLUMN IF NOT EXISTS business_impact TEXT;",
+]
+
+_SOC_V2_COLUMNS = [
+    "ALTER TABLE alerts ADD COLUMN IF NOT EXISTS severity_reason TEXT;",
+    "ALTER TABLE alerts ADD COLUMN IF NOT EXISTS recommended_action TEXT;",
+    "ALTER TABLE alerts ADD COLUMN IF NOT EXISTS scoring_factors TEXT;",
+]
+
 
 async def run_migrations(engine: AsyncEngine) -> None:
     """
@@ -57,19 +70,24 @@ async def run_migrations(engine: AsyncEngine) -> None:
     import app.models.incident          # ensure models are registered in metadata
     import app.models.threat_intel
     import app.models.blacklist
+    import app.models.threat_feed
+    import app.models.extracted_ioc
+    import app.models.mitre_mapping
+    import app.models.analyst_note
+    import app.models.incident_timeline
+    import app.models.incident_report
+    import app.models.platform_settings
 
+    # Separate transactions so a single failed ALTER/CREATE INDEX cannot roll back create_all
     async with engine.begin() as conn:
-        # 1. Create brand-new tables (incidents, threat_intel, ip_blacklist)
-        #    create_all skips tables that already exist
         await conn.run_sync(Base.metadata.create_all)
         logger.info("Schema create_all complete")
 
-        # 2. Add new columns to pre-existing tables
-        for stmt in _ALERT_COLUMNS + _LOG_ENTRY_COLUMNS:
+    async with engine.begin() as conn:
+        for stmt in _ALERT_COLUMNS + _LOG_ENTRY_COLUMNS + _INCIDENT_COLUMNS + _SOC_V2_COLUMNS:
             try:
                 await conn.execute(text(stmt))
             except Exception as exc:
-                # Log but don't abort — some statements may fail on duplicate index names etc.
                 logger.debug("Migration stmt skipped (%s): %s", exc.__class__.__name__, stmt.strip())
 
     logger.info("Database migrations applied successfully")

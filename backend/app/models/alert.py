@@ -90,6 +90,11 @@ class Alert(Base):
     # Notification tracking
     notified: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
 
+    # Advanced severity scoring (SOC Platform 2.0)
+    severity_reason: Mapped[str] = mapped_column(Text, nullable=True)
+    recommended_action: Mapped[str] = mapped_column(Text, nullable=True)
+    scoring_factors: Mapped[str] = mapped_column(Text, nullable=True)  # JSON breakdown
+
     # Timestamps
     triggered_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
@@ -100,7 +105,6 @@ class Alert(Base):
     resolved_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=True)
 
     __table_args__ = (
-        Index("ix_alerts_risk_score", "risk_score"),
         Index("ix_alerts_source_ip_triggered", "source_ip", "triggered_at"),
     )
 

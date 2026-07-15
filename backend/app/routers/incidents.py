@@ -24,6 +24,7 @@ from app.models.incident import Incident, IncidentStatus, IncidentSeverity
 from app.models.alert import Alert
 from app.models.user import User
 from app.schemas.alert import AlertResponse
+from app.services.timeline_service import timeline_service
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api/v1/incidents", tags=["incidents"])
@@ -52,6 +53,10 @@ class IncidentResponse(BaseModel):
     llm_summary:   Optional[str]
     recommended_playbook: Optional[str]
     auto_actions_taken:  Optional[list]
+    affected_assets: Optional[str] = None
+    related_iocs: Optional[str] = None
+    business_impact: Optional[str] = None
+    closed_date: Optional[datetime] = None
     first_seen:    datetime
     last_seen:     datetime
     resolved_at:   Optional[datetime]
@@ -85,10 +90,26 @@ class IncidentResponse(BaseModel):
             llm_summary=inc.llm_summary,
             recommended_playbook=inc.recommended_playbook,
             auto_actions_taken=_parse(inc.auto_actions_taken),
+            affected_assets=getattr(inc, "affected_assets", None),
+            related_iocs=getattr(inc, "related_iocs", None),
+            business_impact=getattr(inc, "business_impact", None),
+            closed_date=getattr(inc, "closed_date", None),
             first_seen=inc.first_seen,
             last_seen=inc.last_seen,
             resolved_at=inc.resolved_at,
         )
+
+
+class IncidentCreate(BaseModel):
+    title: str
+    description: Optional[str] = None
+    severity: IncidentSeverity = IncidentSeverity.MEDIUM
+    status: IncidentStatus = IncidentStatus.OPEN
+    risk_score: float = 50.0
+    source_ip: Optional[str] = None
+    assigned_to: Optional[str] = None
+    affected_assets: Optional[str] = None
+    business_impact: Optional[str] = None
 
 
 class IncidentUpdate(BaseModel):
@@ -96,6 +117,19 @@ class IncidentUpdate(BaseModel):
     assigned_to: Optional[str]            = None
     description: Optional[str]            = None
     notes:       Optional[str]            = None
+    severity:    Optional[IncidentSeverity] = None
+    risk_score:  Optional[float] = None
+    affected_assets: Optional[str] = None
+    business_impact: Optional[str] = None
+
+
+class AssignRequest(BaseModel):
+    assigned_to: str
+
+
+class StatusRequest(BaseModel):
+    status: IncidentStatus
+
 
 
 class IncidentSummary(BaseModel):
@@ -106,6 +140,45 @@ class IncidentSummary(BaseModel):
     critical:     int
     high:         int
     avg_risk_score: float
+
+
+# ---------------------------------------------------------------------------
+# Create
+# ---------------------------------------------------------------------------
+
+@router.post("", response_model=IncidentResponse, status_code=status.HTTP_201_CREATED)
+async def create_incident(
+    payload: IncidentCreate,
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(get_current_user),
+):
+    now = datetime.now(timezone.utc)
+    inc = Incident(
+        title=payload.title,
+        description=payload.description,
+        severity=payload.severity,
+        status=payload.status,
+        risk_score=payload.risk_score,
+        source_ip=payload.source_ip,
+        assigned_to=payload.assigned_to or user.username,
+        affected_assets=payload.affected_assets,
+        business_impact=payload.business_impact,
+        first_seen=now,
+        last_seen=now,
+    )
+    db.add(inc)
+    await db.flush()
+    await timeline_service.add_timeline_event(
+        db, inc.id,
+        event_type="status_changed",
+        title="Incident created",
+        description=payload.description or payload.title,
+        source="incident_management",
+        severity=payload.severity.value,
+    )
+    await db.commit()
+    await db.refresh(inc)
+    return IncidentResponse.from_orm_safe(inc)
 
 
 # ---------------------------------------------------------------------------
@@ -206,17 +279,82 @@ async def update_incident(
 
     if payload.status is not None:
         inc.status = payload.status
-        if payload.status == IncidentStatus.RESOLVED:
+        if payload.status in (IncidentStatus.RESOLVED, IncidentStatus.FALSE_POSITIVE):
             inc.resolved_at = datetime.now(timezone.utc)
+            inc.closed_date = datetime.now(timezone.utc)
+        await timeline_service.add_timeline_event(
+            db, incident_id,
+            event_type="status_changed",
+            title=f"Status changed to {payload.status.value}",
+            description=payload.notes or "",
+            source="incident_management",
+            severity=inc.severity.value if inc.severity else None,
+        )
 
     if payload.assigned_to is not None:
         inc.assigned_to = payload.assigned_to
     if payload.description is not None:
         inc.description = payload.description
+    if payload.severity is not None:
+        inc.severity = payload.severity
+        await timeline_service.add_timeline_event(
+            db, incident_id,
+            event_type="severity_updated",
+            title=f"Severity updated to {payload.severity.value}",
+            source="incident_management",
+            severity=payload.severity.value,
+        )
+    if payload.risk_score is not None:
+        inc.risk_score = payload.risk_score
+    if payload.affected_assets is not None:
+        inc.affected_assets = payload.affected_assets
+    if payload.business_impact is not None:
+        inc.business_impact = payload.business_impact
 
+    inc.last_seen = datetime.now(timezone.utc)
     await db.commit()
     await db.refresh(inc)
     return IncidentResponse.from_orm_safe(inc)
+
+
+@router.put("/{incident_id}", response_model=IncidentResponse)
+async def put_incident(
+    incident_id: int,
+    payload: IncidentUpdate,
+    db: AsyncSession = Depends(get_db),
+    _user: User = Depends(get_current_user),
+):
+    return await update_incident(incident_id, payload, db, _user)
+
+
+@router.post("/{incident_id}/assign", response_model=IncidentResponse)
+async def assign_incident(
+    incident_id: int,
+    payload: AssignRequest,
+    db: AsyncSession = Depends(get_db),
+    _user: User = Depends(get_current_user),
+):
+    return await update_incident(
+        incident_id,
+        IncidentUpdate(assigned_to=payload.assigned_to),
+        db,
+        _user,
+    )
+
+
+@router.post("/{incident_id}/status", response_model=IncidentResponse)
+async def set_incident_status(
+    incident_id: int,
+    payload: StatusRequest,
+    db: AsyncSession = Depends(get_db),
+    _user: User = Depends(get_current_user),
+):
+    return await update_incident(
+        incident_id,
+        IncidentUpdate(status=payload.status),
+        db,
+        _user,
+    )
 
 
 @router.post("/{incident_id}/escalate", response_model=IncidentResponse)
