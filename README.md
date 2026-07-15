@@ -254,24 +254,6 @@ This repository is a defensive SOC portfolio/demo system. Use only authorized da
 
 ---
 
-## Upwork Portfolio Case Study
-
-This project demonstrates advanced AI and cybersecurity engineering skills including ML anomaly detection, threat intelligence ingestion, IOC extraction, MITRE ATT&CK mapping, severity scoring, LLM-based incident explanation, timeline reconstruction, analyst workflow design, PDF incident reporting, FastAPI backend development, React dashboard development, PostgreSQL database design, and production-style SOC platform architecture.
-
----
-
-## Theme
-
-**Enterprise SaaS dark UI** (HCI-informed)
-
-- Canvas `#0B1220` · Panel `#121A2B` · Card `#182234` · Border `#2A3548`
-- Brand blue `#3B82F6` for primary actions and navigation focus
-- Body text `#F1F5F9` / muted `#A8B3C7` for long-session readability
-- Severity kept semantic (not brand-colored): Critical `#EF4444` · High `#F97316` · Medium `#EAB308` · Low `#22C55E`
-- Soft card elevation instead of neon glow to reduce visual fatigue
-
----
-
 ## License
 
 This project is licensed under the [MIT License](LICENSE).
